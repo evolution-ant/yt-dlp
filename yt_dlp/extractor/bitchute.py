@@ -6,8 +6,6 @@ import re
 
 from .common import InfoExtractor
 from ..utils import (
-    ExtractorError,
-    GeoRestrictedError,
     orderedSet,
     unified_strdate,
     urlencode_postdata,
@@ -17,16 +15,16 @@ from ..utils import (
 class BitChuteIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?bitchute\.com/(?:video|embed|torrent/[^/]+)/(?P<id>[^/?#&]+)'
     _TESTS = [{
-        'url': 'https://www.bitchute.com/video/UGlrF9o9b-Q/',
-        'md5': '7e427d7ed7af5a75b5855705ec750e2b',
+        'url': 'https://www.bitchute.com/video/szoMrox2JEI/',
+        'md5': '66c4a70e6bfc40dcb6be3eb1d74939eb',
         'info_dict': {
             'id': 'szoMrox2JEI',
             'ext': 'mp4',
-            'title': 'This is the first video on #BitChute !',
-            'description': 'md5:a0337e7b1fe39e32336974af8173a034',
+            'title': 'Fuck bitches get money',
+            'description': 'md5:3f21f6fb5b1d17c3dee9cf6b5fe60b3a',
             'thumbnail': r're:^https?://.*\.jpg$',
-            'uploader': 'BitChute',
-            'upload_date': '20170103',
+            'uploader': 'Victoria X Rave',
+            'upload_date': '20170813',
         },
     }, {
         'url': 'https://www.bitchute.com/embed/lbb5G1hjPhw/',
@@ -35,14 +33,6 @@ class BitChuteIE(InfoExtractor):
         'url': 'https://www.bitchute.com/torrent/Zee5BE49045h/szoMrox2JEI.webtorrent',
         'only_matching': True,
     }]
-
-    @staticmethod
-    def _extract_urls(webpage):
-        return [
-            mobj.group('url')
-            for mobj in re.finditer(
-                r'<(?:script|iframe)[^>]+\bsrc=(["\'])(?P<url>%s)' % BitChuteIE._VALID_URL,
-                webpage)]
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
@@ -69,14 +59,8 @@ class BitChuteIE(InfoExtractor):
             for format_url in orderedSet(format_urls)]
 
         if not formats:
-            entries = self._parse_html5_media_entries(
-                url, webpage, video_id)
-            if not entries:
-                error = self._html_search_regex(r'<h1 class="page-title">([^<]+)</h1>', webpage, 'error', default='Cannot find video')
-                if error == 'Video Unavailable':
-                    raise GeoRestrictedError(error)
-                raise ExtractorError(error)
-            formats = entries[0]['formats']
+            formats = self._parse_html5_media_entries(
+                url, webpage, video_id)[0]['formats']
 
         self._check_formats(formats, video_id)
         self._sort_formats(formats)

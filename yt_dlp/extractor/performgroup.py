@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import int_or_none
@@ -33,7 +34,7 @@ class PerformGroupIE(InfoExtractor):
             })
 
     def _real_extract(self, url):
-        player_id, auth_token = self._match_valid_url(url).groups()
+        player_id, auth_token = re.search(self._VALID_URL, url).groups()
         bootstrap = self._call_api('bootstrap', auth_token, player_id, url)
         video = bootstrap['config']['dataSource']['sourceItems'][0]['videos'][0]
         video_id = video['uuid']

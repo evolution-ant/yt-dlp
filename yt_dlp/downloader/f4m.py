@@ -267,14 +267,13 @@ class F4mFD(FragmentFD):
         media = doc.findall(_add_ns('media'))
         if not media:
             self.report_error('No media found')
-        if not self.params.get('allow_unplayable_formats'):
-            for e in (doc.findall(_add_ns('drmAdditionalHeader'))
-                      + doc.findall(_add_ns('drmAdditionalHeaderSet'))):
-                # If id attribute is missing it's valid for all media nodes
-                # without drmAdditionalHeaderId or drmAdditionalHeaderSetId attribute
-                if 'id' not in e.attrib:
-                    self.report_error('Missing ID in f4m DRM')
-            media = remove_encrypted_media(media)
+        for e in (doc.findall(_add_ns('drmAdditionalHeader'))
+                  + doc.findall(_add_ns('drmAdditionalHeaderSet'))):
+            # If id attribute is missing it's valid for all media nodes
+            # without drmAdditionalHeaderId or drmAdditionalHeaderSetId attribute
+            if 'id' not in e.attrib:
+                self.report_error('Missing ID in f4m DRM')
+        media = remove_encrypted_media(media)
         if not media:
             self.report_error('Unsupported DRM')
         return media
@@ -325,8 +324,8 @@ class F4mFD(FragmentFD):
         urlh = self.ydl.urlopen(self._prepare_url(info_dict, man_url))
         man_url = urlh.geturl()
         # Some manifests may be malformed, e.g. prosiebensat1 generated manifests
-        # (see https://github.com/ytdl-org/youtube-dl/issues/6215#issuecomment-121704244
-        # and https://github.com/ytdl-org/youtube-dl/issues/7823)
+        # (see https://github.com/ytdl-org/yt-dlp/issues/6215#issuecomment-121704244
+        # and https://github.com/ytdl-org/yt-dlp/issues/7823)
         manifest = fix_xml_ampersands(urlh.read().decode('utf-8', 'ignore')).strip()
 
         doc = compat_etree_fromstring(manifest)
@@ -366,7 +365,7 @@ class F4mFD(FragmentFD):
         ctx = {
             'filename': filename,
             'total_frags': total_frags,
-            'live': bool(live),
+            'live': live,
         }
 
         self._prepare_frag_download(ctx)
@@ -380,7 +379,7 @@ class F4mFD(FragmentFD):
 
         base_url_parsed = compat_urllib_parse_urlparse(base_url)
 
-        self._start_frag_download(ctx, info_dict)
+        self._start_frag_download(ctx)
 
         frag_index = 0
         while fragments_list:
@@ -410,7 +409,7 @@ class F4mFD(FragmentFD):
                             # In tests, segments may be truncated, and thus
                             # FlvReader may not be able to parse the whole
                             # chunk. If so, write the segment as is
-                            # See https://github.com/ytdl-org/youtube-dl/issues/9214
+                            # See https://github.com/ytdl-org/yt-dlp/issues/9214
                             dest_stream.write(down_data)
                             break
                         raise
@@ -434,6 +433,6 @@ class F4mFD(FragmentFD):
                     msg = 'Missed %d fragments' % (fragments_list[0][1] - (frag_i + 1))
                     self.report_warning(msg)
 
-        self._finish_frag_download(ctx, info_dict)
+        self._finish_frag_download(ctx)
 
         return True

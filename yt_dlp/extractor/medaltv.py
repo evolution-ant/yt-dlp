@@ -15,39 +15,33 @@ from ..utils import (
 
 
 class MedalTVIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?medal\.tv/clips/(?P<id>[^/?#&]+)'
+    _VALID_URL = r'https?://(?:www\.)?medal\.tv/clips/(?P<id>[0-9]+)'
     _TESTS = [{
-        'url': 'https://medal.tv/clips/2mA60jWAGQCBH',
+        'url': 'https://medal.tv/clips/34934644/3Is9zyGMoBMr',
         'md5': '7b07b064331b1cf9e8e5c52a06ae68fa',
         'info_dict': {
-            'id': '2mA60jWAGQCBH',
+            'id': '34934644',
             'ext': 'mp4',
             'title': 'Quad Cold',
             'description': 'Medal,https://medal.tv/desktop/',
             'uploader': 'MowgliSB',
             'timestamp': 1603165266,
             'upload_date': '20201020',
-            'uploader_id': '10619174',
+            'uploader_id': 10619174,
         }
     }, {
-        'url': 'https://medal.tv/clips/2um24TWdty0NA',
+        'url': 'https://medal.tv/clips/36787208',
         'md5': 'b6dc76b78195fff0b4f8bf4a33ec2148',
         'info_dict': {
-            'id': '2um24TWdty0NA',
+            'id': '36787208',
             'ext': 'mp4',
             'title': 'u tk me i tk u bigger',
             'description': 'Medal,https://medal.tv/desktop/',
             'uploader': 'Mimicc',
             'timestamp': 1605580939,
             'upload_date': '20201117',
-            'uploader_id': '5156321',
+            'uploader_id': 5156321,
         }
-    }, {
-        'url': 'https://medal.tv/clips/37rMeFpryCC-9',
-        'only_matching': True,
-    }, {
-        'url': 'https://medal.tv/clips/2WRj40tpY_EU9',
-        'only_matching': True,
     }]
 
     def _real_extract(self, url):
@@ -103,11 +97,11 @@ class MedalTVIE(InfoExtractor):
         error = clip.get('error')
         if not formats and error:
             if error == 404:
-                self.raise_no_formats(
+                raise ExtractorError(
                     'That clip does not exist.',
                     expected=True, video_id=video_id)
             else:
-                self.raise_no_formats(
+                raise ExtractorError(
                     'An unknown error occurred ({0}).'.format(error),
                     video_id=video_id)
 

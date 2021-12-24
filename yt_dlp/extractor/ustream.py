@@ -13,7 +13,6 @@ from ..utils import (
     ExtractorError,
     int_or_none,
     float_or_none,
-    join_nonempty,
     mimetype2ext,
     str_or_none,
 )
@@ -76,7 +75,7 @@ class UstreamIE(InfoExtractor):
     @staticmethod
     def _extract_url(webpage):
         mobj = re.search(
-            r'<iframe[^>]+?src=(["\'])(?P<url>https?://(?:www\.)?(?:ustream\.tv|video\.ibm\.com)/embed/.+?)\1', webpage)
+            r'<iframe[^>]+?src=(["\'])(?P<url>http://(?:www\.)?(?:ustream\.tv|video\.ibm\.com)/embed/.+?)\1', webpage)
         if mobj is not None:
             return mobj.group('url')
 
@@ -140,8 +139,8 @@ class UstreamIE(InfoExtractor):
             content_type = stream['contentType']
             kind = content_type.split('/')[0]
             f = {
-                'format_id': join_nonempty(
-                    'dash', kind, str_or_none(stream.get('bitrate'))),
+                'format_id': '-'.join(filter(None, [
+                    'dash', kind, str_or_none(stream.get('bitrate'))])),
                 'protocol': 'http_dash_segments',
                 # TODO: generate a MPD doc for external players?
                 'url': encode_data_uri(b'<MPD/>', 'text/xml'),
@@ -166,10 +165,10 @@ class UstreamIE(InfoExtractor):
         return formats
 
     def _real_extract(self, url):
-        m = self._match_valid_url(url)
+        m = re.match(self._VALID_URL, url)
         video_id = m.group('id')
 
-        # some sites use this embed format (see: https://github.com/ytdl-org/youtube-dl/issues/2990)
+        # some sites use this embed format (see: https://github.com/ytdl-org/yt-dlp/issues/2990)
         if m.group('type') == 'embed/recorded':
             video_id = m.group('id')
             desktop_url = 'http://www.ustream.tv/recorded/' + video_id
@@ -259,7 +258,7 @@ class UstreamChannelIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        m = self._match_valid_url(url)
+        m = re.match(self._VALID_URL, url)
         display_id = m.group('slug')
         webpage = self._download_webpage(url, display_id)
         channel_id = self._html_search_meta('ustream:channel_id', webpage)

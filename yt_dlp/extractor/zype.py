@@ -56,8 +56,6 @@ class ZypeIE(InfoExtractor):
         video = response['video']
         title = video['title']
 
-        subtitles = {}
-
         if isinstance(body, dict):
             formats = []
             for output in body.get('outputs', []):
@@ -66,7 +64,7 @@ class ZypeIE(InfoExtractor):
                     continue
                 name = output.get('name')
                 if name == 'm3u8':
-                    formats, subtitles = self._extract_m3u8_formats_and_subtitles(
+                    formats = self._extract_m3u8_formats(
                         output_url, video_id, 'mp4',
                         'm3u8_native', m3u8_id='hls', fatal=False)
                 else:
@@ -87,19 +85,8 @@ class ZypeIE(InfoExtractor):
         else:
             m3u8_url = self._search_regex(
                 r'(["\'])(?P<url>(?:(?!\1).)+\.m3u8(?:(?!\1).)*)\1',
-                body, 'm3u8 url', group='url', default=None)
-            if not m3u8_url:
-                source = self._search_regex(
-                    r'(?s)sources\s*:\s*\[\s*({.+?})\s*\]', body, 'source')
-
-                def get_attr(key):
-                    return self._search_regex(
-                        r'\b%s\s*:\s*([\'"])(?P<val>(?:(?!\1).)+)\1' % key,
-                        source, key, group='val')
-
-                if get_attr('integration') == 'verizon-media':
-                    m3u8_url = 'https://content.uplynk.com/%s.m3u8' % get_attr('id')
-            formats, subtitles = self._extract_m3u8_formats_and_subtitles(
+                body, 'm3u8 url', group='url')
+            formats = self._extract_m3u8_formats(
                 m3u8_url, video_id, 'mp4', 'm3u8_native', m3u8_id='hls')
             text_tracks = self._search_regex(
                 r'textTracks\s*:\s*(\[[^]]+\])',
@@ -109,6 +96,7 @@ class ZypeIE(InfoExtractor):
                     text_tracks, video_id, js_to_json, False)
         self._sort_formats(formats)
 
+        subtitles = {}
         if text_tracks:
             for text_track in text_tracks:
                 tt_url = dict_get(text_track, ('file', 'src'))

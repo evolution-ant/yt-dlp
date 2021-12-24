@@ -1,0 +1,57 @@
+网站 https://www.saveonline.video/
+
+开源工程：
+https://github.com/ytdl-org/yt-dlp
+
+执行方式：
+yt-dlp -J https://www.youtube.com/watch?v=OsOUcikyGRk
+python bin/yt-dlp -J https://www.youtube.com/watch?v=OsOUcikyGRk
+python yt_dlp/__main__.py -J https://www.youtube.com/watch?v=OsOUcikyGRk
+python yt_dlp/__main__.py https://www.youtube.com/watch?v=OsOUcikyGRk
+
+常用参数：
+-J, --dump-single-json
+--skip-download
+-F, --list-formats 
+--flat-playlist 	只获取歌单简略信息（id，title）
+
+源码结构：
+WebService.py 	因为 iOS 平台无法运行子进程，所以提供 http 的方式来交互
+options.py	--url-support
+extractor		分析（#####），list_extractors
+downloader	下载，多种协议，多线程下载
+postprocessor	合并音视频，处理 MP3 元数据
+
+分支说明
+dev	Windows/MacOS App
+pre	
+master	App
+
+从 Github 合并
+执行 merge_from_github.bat，手动处理冲突，commit 并 push
+
+限制：
+不要引入 python 的新包，因为iOS，Android python 环境里安装新包会很麻烦
+
+避免冲突
+if 代码块尽量不改变缩进
+一定程度容忍重复代码
+自己的修改要包含起始和结束标记
+遭遇大范围冲突，先丢弃自己的修改，测试是否正常，不正常再补自己的代码
+
+自动化测试
+	单元测试
+	回归测试
+
+编译和打包
+windows： python setup.py install --install-scripts=.
+其他系统: make
+
+----------------------------------------------------------------------------------------------------------------
+beego
+
+
+
+----------------------------------------------------------------------------------------------------------------
+http://10.10.2.123/#/service
+

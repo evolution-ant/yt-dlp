@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -49,7 +50,7 @@ class CanalplusIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        site, display_id, video_id = self._match_valid_url(url).groups()
+        site, display_id, video_id = re.match(self._VALID_URL, url).groups()
 
         site_id = self._SITE_ID_MAP[site]
 
@@ -88,7 +89,7 @@ class CanalplusIE(InfoExtractor):
                     # the secret extracted from ya function in http://player.canalplus.fr/common/js/canalPlayer.js
                     'url': format_url + '?secret=pqzerjlsmdkjfoiuerhsdlfknaes',
                     'format_id': format_id,
-                    'quality': preference(format_id),
+                    'preference': preference(format_id),
                 })
         self._sort_formats(formats)
 

@@ -17,7 +17,6 @@ from ..utils import (
     get_exe_version,
     is_outdated_version,
     std_headers,
-    Popen,
 )
 
 
@@ -223,10 +222,11 @@ class PhantomJSwrapper(object):
         else:
             self.extractor.to_screen('%s: %s' % (video_id, note2))
 
-        p = Popen(
-            [self.exe, '--ssl-protocol=any', self._TMP_FILES['script'].name],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = p.communicate_or_kill()
+        p = subprocess.Popen([
+            self.exe, '--ssl-protocol=any',
+            self._TMP_FILES['script'].name
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = p.communicate()
         if p.returncode != 0:
             raise ExtractorError(
                 'Executing JS failed\n:' + encodeArgument(err))

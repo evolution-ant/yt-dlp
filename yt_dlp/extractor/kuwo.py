@@ -49,7 +49,7 @@ class KuwoBaseIE(InfoExtractor):
                     'url': song_url,
                     'format_id': file_format['format'],
                     'format': file_format['format'],
-                    'quality': file_format['preference'],
+                    'preference': file_format['preference'],
                     'abr': file_format.get('abr'),
                 })
 
@@ -215,7 +215,7 @@ class KuwoSingerIE(InfoExtractor):
             'title': 'Ali',
         },
         'playlist_mincount': 95,
-        'skip': 'Regularly stalls travis build',  # See https://travis-ci.org/ytdl-org/youtube-dl/jobs/78878540
+        'skip': 'Regularly stalls travis build',  # See https://travis-ci.org/ytdl-org/yt-dlp/jobs/78878540
     }]
 
     PAGE_SIZE = 15

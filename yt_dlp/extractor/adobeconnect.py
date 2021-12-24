@@ -31,7 +31,7 @@ class AdobeConnectIE(InfoExtractor):
 
         return {
             'id': video_id,
-            'title': title,
+            'title': self._live_title(title) if is_live else title,
             'formats': formats,
             'is_live': is_live,
         }

@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import json
+import re
 
 from .common import InfoExtractor
 from .kaltura import KalturaIE
@@ -46,11 +47,11 @@ class AZMedienIE(InfoExtractor):
         'url': 'https://www.telebaern.tv/telebaern-news/montag-1-oktober-2018-ganze-sendung-133531189#video=0_7xjo9lf1',
         'only_matching': True
     }]
-    _API_TEMPL = 'https://www.%s/api/pub/gql/%s/NewsArticleTeaser/a4016f65fe62b81dc6664dd9f4910e4ab40383be'
+    _API_TEMPL = 'https://www.%s/api/pub/gql/%s/NewsArticleTeaser/cb9f2f81ed22e9b47f4ca64ea3cc5a5d13e88d1d'
     _PARTNER_ID = '1719221'
 
     def _real_extract(self, url):
-        host, display_id, article_id, entry_id = self._match_valid_url(url).groups()
+        host, display_id, article_id, entry_id = re.match(self._VALID_URL, url).groups()
 
         if not entry_id:
             entry_id = self._download_json(

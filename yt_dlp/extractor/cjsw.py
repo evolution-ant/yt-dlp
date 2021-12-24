@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -29,7 +30,7 @@ class CJSWIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         program, episode_id = mobj.group('program', 'id')
         audio_id = '%s/%s' % (program, episode_id)
 

@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from .youtube import YoutubeIE
@@ -40,7 +41,7 @@ class BreakIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        display_id, video_id = self._match_valid_url(url).groups()
+        display_id, video_id = re.match(self._VALID_URL, url).groups()
 
         webpage = self._download_webpage(url, display_id)
 

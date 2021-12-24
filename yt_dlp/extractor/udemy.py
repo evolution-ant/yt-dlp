@@ -378,7 +378,7 @@ class UdemyIE(InfoExtractor):
                     }, res))
 
             # react rendition since 2017.04.15 (see
-            # https://github.com/ytdl-org/youtube-dl/issues/12744)
+            # https://github.com/ytdl-org/yt-dlp/issues/12744)
             data = self._parse_json(
                 self._search_regex(
                     r'videojs-setup-data=(["\'])(?P<data>{.+?})\1', view_html,
@@ -405,7 +405,7 @@ class UdemyIE(InfoExtractor):
                 if f.get('url'):
                     formats.append(f)
 
-        self._sort_formats(formats)
+        self._sort_formats(formats, field_preference=('height', 'width', 'tbr', 'format_id'))
 
         return {
             'id': video_id,

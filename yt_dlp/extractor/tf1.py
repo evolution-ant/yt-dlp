@@ -1,85 +1,92 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import json
-
 from .common import InfoExtractor
-from ..utils import (
-    int_or_none,
-    parse_iso8601,
-    try_get,
-)
+from ..compat import compat_str
 
 
 class TF1IE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?tf1\.fr/[^/]+/(?P<program_slug>[^/]+)/videos/(?P<id>[^/?&#]+)\.html'
+    """TF1 uses the wat.tv player."""
+    _VALID_URL = r'https?://(?:(?:videos|www|lci)\.tf1|(?:www\.)?(?:tfou|ushuaiatv|histoire|tvbreizh))\.fr/(?:[^/]+/)*(?P<id>[^/?#.]+)'
     _TESTS = [{
-        'url': 'https://www.tf1.fr/tmc/quotidien-avec-yann-barthes/videos/quotidien-premiere-partie-11-juin-2019.html',
+        'url': 'http://videos.tf1.fr/auto-moto/citroen-grand-c4-picasso-2013-presentation-officielle-8062060.html',
         'info_dict': {
-            'id': '13641379',
+            'id': '10635995',
             'ext': 'mp4',
-            'title': 'md5:f392bc52245dc5ad43771650c96fb620',
-            'description': 'md5:a02cdb217141fb2d469d6216339b052f',
-            'upload_date': '20190611',
-            'timestamp': 1560273989,
-            'duration': 1738,
-            'series': 'Quotidien avec Yann Barthès',
-            'tags': ['intégrale', 'quotidien', 'Replay'],
+            'title': 'Citroën Grand C4 Picasso 2013 : présentation officielle',
+            'description': 'Vidéo officielle du nouveau Citroën Grand C4 Picasso, lancé à l\'automne 2013.',
         },
         'params': {
             # Sometimes wat serves the whole file with the --test option
             'skip_download': True,
         },
+        'expected_warnings': ['HTTP Error 404'],
+    }, {
+        'url': 'http://www.tfou.fr/chuggington/videos/le-grand-mysterioso-chuggington-7085291-739.html',
+        'info_dict': {
+            'id': 'le-grand-mysterioso-chuggington-7085291-739',
+            'ext': 'mp4',
+            'title': 'Le grand Mystérioso - Chuggington',
+            'description': 'Le grand Mystérioso - Emery rêve qu\'un article lui soit consacré dans le journal.',
+            'upload_date': '20150103',
+        },
+        'params': {
+            # Sometimes wat serves the whole file with the --test option
+            'skip_download': True,
+        },
+        'skip': 'HTTP Error 410: Gone',
     }, {
         'url': 'http://www.tf1.fr/tf1/koh-lanta/videos/replay-koh-lanta-22-mai-2015.html',
         'only_matching': True,
     }, {
+        'url': 'http://lci.tf1.fr/sept-a-huit/videos/sept-a-huit-du-24-mai-2015-8611550.html',
+        'only_matching': True,
+    }, {
         'url': 'http://www.tf1.fr/hd1/documentaire/videos/mylene-farmer-d-une-icone.html',
         'only_matching': True,
+    }, {
+        'url': 'https://www.tf1.fr/tmc/quotidien-avec-yann-barthes/videos/quotidien-premiere-partie-11-juin-2019.html',
+        'info_dict': {
+            'id': '13641379',
+            'ext': 'mp4',
+            'title': 'md5:f392bc52245dc5ad43771650c96fb620',
+            'description': 'md5:44bc54f0a21322f5b91d68e76a544eae',
+            'upload_date': '20190611',
+        },
+        'params': {
+            # Sometimes wat serves the whole file with the --test option
+            'skip_download': True,
+        },
     }]
 
     def _real_extract(self, url):
-        program_slug, slug = self._match_valid_url(url).groups()
-        video = self._download_json(
-            'https://www.tf1.fr/graphql/web', slug, query={
-                'id': '9b80783950b85247541dd1d851f9cc7fa36574af015621f853ab111a679ce26f',
-                'variables': json.dumps({
-                    'programSlug': program_slug,
-                    'slug': slug,
-                })
-            })['data']['videoBySlug']
-        wat_id = video['streamId']
+        video_id = self._match_id(url)
 
-        tags = []
-        for tag in (video.get('tags') or []):
-            label = tag.get('label')
-            if not label:
-                continue
-            tags.append(label)
+        webpage = self._download_webpage(url, video_id)
 
-        decoration = video.get('decoration') or {}
+        wat_id = None
 
-        thumbnails = []
-        for source in (try_get(decoration, lambda x: x['image']['sources'], list) or []):
-            source_url = source.get('url')
-            if not source_url:
-                continue
-            thumbnails.append({
-                'url': source_url,
-                'width': int_or_none(source.get('width')),
-            })
+        data = self._parse_json(
+            self._search_regex(
+                r'__APOLLO_STATE__\s*=\s*({.+?})\s*(?:;|</script>)', webpage,
+                'data', default='{}'), video_id, fatal=False)
 
-        return {
-            '_type': 'url_transparent',
-            'id': wat_id,
-            'url': 'wat:' + wat_id,
-            'title': video.get('title'),
-            'thumbnails': thumbnails,
-            'description': decoration.get('description'),
-            'timestamp': parse_iso8601(video.get('date')),
-            'duration': int_or_none(try_get(video, lambda x: x['publicPlayingInfos']['duration'])),
-            'tags': tags,
-            'series': decoration.get('programLabel'),
-            'season_number': int_or_none(video.get('season')),
-            'episode_number': int_or_none(video.get('episode')),
-        }
+        if data:
+            try:
+                wat_id = next(
+                    video.get('streamId')
+                    for key, video in data.items()
+                    if isinstance(video, dict)
+                    and video.get('slug') == video_id)
+                if not isinstance(wat_id, compat_str) or not wat_id.isdigit():
+                    wat_id = None
+            except StopIteration:
+                pass
+
+        if not wat_id:
+            wat_id = self._html_search_regex(
+                (r'(["\'])(?:https?:)?//www\.wat\.tv/embedframe/.*?(?P<id>\d{8})\1',
+                 r'(["\']?)streamId\1\s*:\s*(["\']?)(?P<id>\d+)\2'),
+                webpage, 'wat id', group='id')
+
+        return self.url_result('wat:%s' % wat_id, 'Wat')

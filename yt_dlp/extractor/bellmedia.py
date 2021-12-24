@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 
@@ -77,7 +78,7 @@ class BellMediaIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        domain, video_id = self._match_valid_url(url).groups()
+        domain, video_id = re.match(self._VALID_URL, url).groups()
         domain = domain.split('.')[0]
         return {
             '_type': 'url_transparent',

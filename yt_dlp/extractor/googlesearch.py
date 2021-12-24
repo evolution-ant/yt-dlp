@@ -11,7 +11,6 @@ class GoogleSearchIE(SearchInfoExtractor):
     _MAX_RESULTS = 1000
     IE_NAME = 'video.google:search'
     _SEARCH_KEY = 'gvsearch'
-    _WORKING = False
     _TEST = {
         'url': 'gvsearch15:python language',
         'info_dict': {
@@ -21,7 +20,16 @@ class GoogleSearchIE(SearchInfoExtractor):
         'playlist_count': 15,
     }
 
-    def _search_results(self, query):
+    def _get_n_results(self, query, n):
+        """Get a specified number of results for a query"""
+
+        entries = []
+        res = {
+            '_type': 'playlist',
+            'id': query,
+            'title': query,
+        }
+
         for pagenum in itertools.count():
             webpage = self._download_webpage(
                 'http://www.google.com/search',
@@ -36,8 +44,16 @@ class GoogleSearchIE(SearchInfoExtractor):
 
             for hit_idx, mobj in enumerate(re.finditer(
                     r'<h3 class="r"><a href="([^"]+)"', webpage)):
-                if re.search(f'id="vidthumb{hit_idx + 1}"', webpage):
-                    yield self.url_result(mobj.group(1))
 
-            if not re.search(r'id="pnnext"', webpage):
-                return
+                # Skip playlists
+                if not re.search(r'id="vidthumb%d"' % (hit_idx + 1), webpage):
+                    continue
+
+                entries.append({
+                    '_type': 'url',
+                    'url': mobj.group(1)
+                })
+
+            if (len(entries) >= n) or not re.search(r'id="pnnext"', webpage):
+                res['entries'] = entries[:n]
+                return res

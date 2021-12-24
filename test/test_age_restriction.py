@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import unicode_literals
 
 # Allow direct execution
@@ -7,7 +7,8 @@ import sys
 import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test.helper import try_rm, is_download_test
+from test.helper import try_rm
+
 
 from yt_dlp import YoutubeDL
 
@@ -31,7 +32,6 @@ def _download_restricted(url, filename, age):
     return res
 
 
-@is_download_test
 class TestAgeRestriction(unittest.TestCase):
     def _assert_restricted(self, url, filename, age, old_age=None):
         self.assertTrue(_download_restricted(url, filename, old_age))

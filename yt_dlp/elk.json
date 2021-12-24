@@ -1,0 +1,37 @@
+{
+	"user": {
+		"ip": "",
+		"mac": "",
+		"platform": ""
+	},
+	"soft": {
+		"version": "",
+		"client_id": ""
+	},
+	"work": {
+		"analysis": {
+			"url": "",
+			"host": "",
+			"analysis_duration": "",
+			"analysis_status": "",
+			"error_code": "",
+			"error_msg": ""
+		},
+		"download": {
+			"download_duration": "",
+			"speed": "",
+			"user_request_resolution": "",
+			"true_resolution": "",
+			"download_status": "",
+			"error_code": "",
+			"error_msg": ""
+		},
+		"transcoding": {
+			"transcoding_duration": "",
+			"transcoding_status": "",
+			"transcoding_error_code": "",
+			"transcoding_error_msg": ""
+		}
+	}
+
+}

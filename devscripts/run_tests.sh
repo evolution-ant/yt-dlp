@@ -1,14 +1,22 @@
-#!/bin/sh
+#!/bin/bash
 
-if [ -z $1 ]; then
-    test_set='test'
-elif [ $1 = 'core' ]; then
-    test_set="-m not download"
-elif [ $1 = 'download' ]; then
-    test_set="-m download"
-else
-    echo 'Invalid test type "'$1'". Use "core" | "download"'
-    exit 1
-fi
+# Keep this list in sync with the `offlinetest` target in Makefile
+DOWNLOAD_TESTS="age_restriction|download|iqiyi_sdk_interpreter|socks|subtitles|write_annotations|youtube_lists|youtube_signature"
 
-python3 -m pytest "$test_set"
+test_set=""
+multiprocess_args=""
+
+case "$YTDL_TEST_SET" in
+    core)
+        test_set="-I test_($DOWNLOAD_TESTS)\.py"
+    ;;
+    download)
+        test_set="-I test_(?!$DOWNLOAD_TESTS).+\.py"
+        multiprocess_args="--processes=4 --process-timeout=540"
+    ;;
+    *)
+        break
+    ;;
+esac
+
+nosetests test --verbose $test_set $multiprocess_args

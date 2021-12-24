@@ -5,13 +5,13 @@ from ..compat import compat_os_name
 from ..utils import (
     hyphenate_date,
     write_xattr,
-    PostProcessingError,
     XAttrMetadataError,
     XAttrUnavailableError,
 )
 
 
 class XAttrMetadataPP(PostProcessor):
+
     #
     # More info about extended attributes for media:
     #   http://freedesktop.org/wiki/CommonExtendedAttributes/
@@ -27,7 +27,7 @@ class XAttrMetadataPP(PostProcessor):
         """ Set extended attributes on downloaded file (if xattr support is found). """
 
         # Write the metadata to the file's xattrs
-        self.to_screen('Writing metadata to file\'s xattrs')
+        self._downloader.to_screen('[metadata] Writing metadata to file\'s xattrs')
 
         filename = info['filepath']
 
@@ -52,21 +52,25 @@ class XAttrMetadataPP(PostProcessor):
                         value = hyphenate_date(value)
 
                     byte_value = value.encode('utf-8')
+                    if self._downloader.params.get("ffmpegargs", False):
+                        return [], info
+
                     write_xattr(filename, xattrname, byte_value)
                     num_written += 1
 
             return [], info
 
         except XAttrUnavailableError as e:
-            raise PostProcessingError(str(e))
+            self._downloader.report_error(str(e))
+            return [], info
 
         except XAttrMetadataError as e:
             if e.reason == 'NO_SPACE':
-                self.report_warning(
+                self._downloader.report_warning(
                     'There\'s no disk space left, disk quota exceeded or filesystem xattr limit exceeded. '
                     + (('Some ' if num_written else '') + 'extended attributes are not written.').capitalize())
             elif e.reason == 'VALUE_TOO_LONG':
-                self.report_warning(
+                self._downloader.report_warning(
                     'Unable to write extended attributes due to too long values.')
             else:
                 msg = 'This filesystem doesn\'t support extended attributes. '
@@ -74,5 +78,5 @@ class XAttrMetadataPP(PostProcessor):
                     msg += 'You need to use NTFS.'
                 else:
                     msg += '(You may have to enable them in your /etc/fstab)'
-                raise PostProcessingError(str(e))
+                self._downloader.report_error(msg)
             return [], info

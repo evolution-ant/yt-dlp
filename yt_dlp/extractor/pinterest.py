@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import json
+import re
 
 from .common import InfoExtractor
 from ..compat import compat_str
@@ -30,7 +31,6 @@ class PinterestBaseIE(InfoExtractor):
 
         title = (data.get('title') or data.get('grid_title') or video_id).strip()
 
-        urls = []
         formats = []
         duration = None
         if extract_formats:
@@ -38,9 +38,8 @@ class PinterestBaseIE(InfoExtractor):
                 if not isinstance(format_dict, dict):
                     continue
                 format_url = url_or_none(format_dict.get('url'))
-                if not format_url or format_url in urls:
+                if not format_url:
                     continue
-                urls.append(format_url)
                 duration = float_or_none(format_dict.get('duration'), scale=1000)
                 ext = determine_ext(format_url)
                 if 'hls' in format_id.lower() or ext == 'm3u8':
@@ -55,7 +54,8 @@ class PinterestBaseIE(InfoExtractor):
                         'height': int_or_none(format_dict.get('height')),
                         'duration': duration,
                     })
-            self._sort_formats(formats)
+            self._sort_formats(
+                formats, field_preference=('height', 'width', 'tbr', 'format_id'))
 
         description = data.get('description') or data.get('description_html') or data.get('seo_description')
         timestamp = unified_timestamp(data.get('created_at'))
@@ -164,7 +164,7 @@ class PinterestCollectionIE(PinterestBaseIE):
             PinterestCollectionIE, cls).suitable(url)
 
     def _real_extract(self, url):
-        username, slug = self._match_valid_url(url).groups()
+        username, slug = re.match(self._VALID_URL, url).groups()
         board = self._call_api(
             'Board', slug, {
                 'slug': slug,

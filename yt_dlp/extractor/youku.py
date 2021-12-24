@@ -154,13 +154,13 @@ class YoukuIE(InfoExtractor):
         # request basic data
         basic_data_params = {
             'vid': video_id,
-            'ccode': '0532',
+            'ccode': '0590',
             'client_ip': '192.168.1.1',
             'utid': cna,
             'client_ts': time.time() / 1000,
         }
 
-        video_password = self.get_param('videopassword')
+        video_password = self._downloader.params.get('videopassword')
         if video_password:
             basic_data_params['password'] = video_password
 

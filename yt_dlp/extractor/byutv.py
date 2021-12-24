@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -51,7 +52,7 @@ class BYUtvIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('id')
         display_id = mobj.group('display_id') or video_id
 
@@ -81,7 +82,6 @@ class BYUtvIE(InfoExtractor):
 
         info = {}
         formats = []
-        subtitles = {}
         for format_id, ep in video.items():
             if not isinstance(ep, dict):
                 continue
@@ -90,16 +90,12 @@ class BYUtvIE(InfoExtractor):
                 continue
             ext = determine_ext(video_url)
             if ext == 'm3u8':
-                m3u8_fmts, m3u8_subs = self._extract_m3u8_formats_and_subtitles(
+                formats.extend(self._extract_m3u8_formats(
                     video_url, video_id, 'mp4', entry_protocol='m3u8_native',
-                    m3u8_id='hls', fatal=False)
-                formats.extend(m3u8_fmts)
-                subtitles = self._merge_subtitles(subtitles, m3u8_subs)
+                    m3u8_id='hls', fatal=False))
             elif ext == 'mpd':
-                mpd_fmts, mpd_subs = self._extract_mpd_formats_and_subtitles(
-                    video_url, video_id, mpd_id='dash', fatal=False)
-                formats.extend(mpd_fmts)
-                subtitles = self._merge_subtitles(subtitles, mpd_subs)
+                formats.extend(self._extract_mpd_formats(
+                    video_url, video_id, mpd_id='dash', fatal=False))
             else:
                 formats.append({
                     'url': video_url,
@@ -118,5 +114,4 @@ class BYUtvIE(InfoExtractor):
             'display_id': display_id,
             'title': display_id,
             'formats': formats,
-            'subtitles': subtitles,
         })

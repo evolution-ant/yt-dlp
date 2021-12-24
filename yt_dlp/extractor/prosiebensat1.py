@@ -34,8 +34,8 @@ class ProSiebenSat1BaseIE(InfoExtractor):
                 'ids': clip_id,
             })[0]
 
-        if not self.get_param('allow_unplayable_formats') and video.get('is_protected') is True:
-            self.report_drm(clip_id)
+        if video.get('is_protected') is True:
+            raise ExtractorError('This video is DRM protected.', expected=True)
 
         formats = []
         if self._ACCESS_ID:
@@ -185,8 +185,8 @@ class ProSiebenSat1IE(ProSiebenSat1BaseIE):
 
     _TESTS = [
         {
-            # Tests changes introduced in https://github.com/ytdl-org/youtube-dl/pull/6242
-            # in response to fixing https://github.com/ytdl-org/youtube-dl/issues/6215:
+            # Tests changes introduced in https://github.com/ytdl-org/yt-dlp/pull/6242
+            # in response to fixing https://github.com/ytdl-org/yt-dlp/issues/6215:
             # - malformed f4m manifest support
             # - proper handling of URLs starting with `https?://` in 2.0 manifests
             # - recursive child f4m manifests extraction

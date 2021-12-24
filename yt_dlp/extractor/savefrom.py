@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import os.path
+import re
 
 from .common import InfoExtractor
 
@@ -27,7 +28,7 @@ class SaveFromIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = os.path.splitext(url.split('/')[-1])[0]
 
         return self.url_result(mobj.group('url'), video_id=video_id)

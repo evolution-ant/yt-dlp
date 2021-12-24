@@ -38,7 +38,7 @@ class TeleMBIE(InfoExtractor):
     ]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('id')
         display_id = mobj.group('display_id')
 
@@ -57,7 +57,7 @@ class TeleMBIE(InfoExtractor):
                     'app': rtmp.group('app'),
                     'player_url': 'http://p.jwpcdn.com/6/10/jwplayer.flash.swf',
                     'page_url': 'http://www.telemb.be',
-                    'preference': -10,
+                    'preference': -1,
                 })
             formats.append(fmt)
         self._sort_formats(formats)

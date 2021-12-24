@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import random
+import re
 
 from .common import InfoExtractor
 from ..compat import compat_urllib_parse_unquote_plus
@@ -34,7 +35,7 @@ class KUSIIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         clip_id = mobj.group('clipId')
         video_id = clip_id or mobj.group('path')
 

@@ -58,7 +58,7 @@ class YouNowLiveIE(InfoExtractor):
         return {
             'id': uploader,
             'is_live': True,
-            'title': uploader,
+            'title': self._live_title(uploader),
             'thumbnail': data.get('awsUrl'),
             'tags': data.get('tags'),
             'categories': data.get('tags'),

@@ -2,11 +2,11 @@
 from __future__ import unicode_literals
 
 from .common import InfoExtractor
+from ..compat import compat_urlparse
 from ..utils import (
     int_or_none,
     orderedSet,
     parse_duration,
-    parse_qs,
     qualities,
     unified_strdate,
     xpath_text
@@ -53,7 +53,7 @@ class EuropaIE(InfoExtractor):
                 if items.get(p):
                     return items[p]
 
-        query = parse_qs(url)
+        query = compat_urlparse.parse_qs(compat_urlparse.urlparse(url).query)
         preferred_lang = query.get('sitelang', ('en', ))[0]
 
         preferred_langs = orderedSet((preferred_lang, 'en', 'int'))

@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import json
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -65,7 +66,7 @@ class PacktPubIE(PacktPubBaseIE):
             raise
 
     def _real_extract(self, url):
-        course_id, chapter_id, video_id, display_id = self._match_valid_url(url).groups()
+        course_id, chapter_id, video_id, display_id = re.match(self._VALID_URL, url).groups()
 
         headers = {}
         if self._TOKEN:
@@ -122,7 +123,7 @@ class PacktPubCourseIE(PacktPubBaseIE):
             PacktPubCourseIE, cls).suitable(url)
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         url, course_id = mobj.group('url', 'id')
 
         course = self._download_json(

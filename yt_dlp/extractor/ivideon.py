@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -37,7 +38,7 @@ class IvideonIE(InfoExtractor):
     _QUALITIES = ('low', 'mid', 'hi')
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         server_id, camera_id = mobj.group('id'), mobj.group('camera_id')
         camera_name, description = None, None
         camera_url = compat_urlparse.urljoin(
@@ -75,7 +76,7 @@ class IvideonIE(InfoExtractor):
 
         return {
             'id': server_id,
-            'title': camera_name or server_id,
+            'title': self._live_title(camera_name or server_id),
             'description': description,
             'is_live': True,
             'formats': formats,

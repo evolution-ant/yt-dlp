@@ -49,7 +49,7 @@ class MatchTVIE(InfoExtractor):
         self._sort_formats(formats)
         return {
             'id': video_id,
-            'title': 'Матч ТВ - Прямой эфир',
+            'title': self._live_title('Матч ТВ - Прямой эфир'),
             'is_live': True,
             'formats': formats,
         }

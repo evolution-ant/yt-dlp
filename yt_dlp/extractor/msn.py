@@ -67,7 +67,7 @@ class MSNIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        display_id, page_id = self._match_valid_url(url).groups()
+        display_id, page_id = re.match(self._VALID_URL, url).groups()
 
         webpage = self._download_webpage(url, display_id)
 
@@ -111,7 +111,7 @@ class MSNIE(InfoExtractor):
                     continue
                 if 'format=m3u8-aapl' in format_url:
                     # m3u8_native should not be used here until
-                    # https://github.com/ytdl-org/youtube-dl/issues/9913 is fixed
+                    # https://github.com/ytdl-org/yt-dlp/issues/9913 is fixed
                     formats.extend(self._extract_m3u8_formats(
                         format_url, display_id, 'mp4',
                         m3u8_id='hls', fatal=False))
@@ -132,7 +132,7 @@ class MSNIE(InfoExtractor):
                         'width': int_or_none(file_.get('width')),
                         'height': int_or_none(file_.get('height')),
                         'vbr': int_or_none(self._search_regex(r'_(\d+)\.mp4', format_url, 'vbr', default=None)),
-                        'quality': 1 if format_id == '1001' else None,
+                        'preference': 1 if format_id == '1001' else None,
                     })
             self._sort_formats(formats)
 

@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..compat import compat_str
@@ -29,7 +30,7 @@ class RBMARadioIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         show_id = mobj.group('show_id')
         episode_id = mobj.group('id')
 

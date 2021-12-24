@@ -55,7 +55,7 @@ class OraTVIE(InfoExtractor):
                 formats.append({
                     'url': http_template % q,
                     'format_id': q,
-                    'quality': preference(q),
+                    'preference': preference(q),
                 })
             self._sort_formats(formats)
         else:

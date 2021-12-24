@@ -17,7 +17,6 @@ from ..utils import (
     float_or_none,
     int_or_none,
     parse_duration,
-    parse_qs,
     qualities,
     srt_subtitles_timecode,
     try_get,
@@ -274,7 +273,7 @@ query viewClip {
         return srt
 
     def _real_extract(self, url):
-        qs = parse_qs(url)
+        qs = compat_urlparse.parse_qs(compat_urlparse.urlparse(url).query)
 
         author = qs.get('author', [None])[0]
         name = qs.get('name', [None])[0]
@@ -328,7 +327,7 @@ query viewClip {
         )
 
         # Some courses also offer widescreen resolution for high quality (see
-        # https://github.com/ytdl-org/youtube-dl/issues/7766)
+        # https://github.com/ytdl-org/yt-dlp/issues/7766)
         widescreen = course.get('supportsWideScreenVideoFormats') is True
         best_quality = 'high-widescreen' if widescreen else 'high'
         if widescreen:
@@ -338,11 +337,11 @@ query viewClip {
         # In order to minimize the number of calls to ViewClip API and reduce
         # the probability of being throttled or banned by Pluralsight we will request
         # only single format until formats listing was explicitly requested.
-        if self.get_param('listformats', False):
+        if self._downloader.params.get('listformats', False):
             allowed_qualities = ALLOWED_QUALITIES
         else:
             def guess_allowed_qualities():
-                req_format = self.get_param('format') or 'best'
+                req_format = self._downloader.params.get('format') or 'best'
                 req_format_split = req_format.split('-', 1)
                 if len(req_format_split) > 1:
                     req_ext, req_quality = req_format_split
@@ -350,7 +349,7 @@ query viewClip {
                     for allowed_quality in ALLOWED_QUALITIES:
                         if req_ext == allowed_quality.ext and req_quality in allowed_quality.qualities:
                             return (AllowedQuality(req_ext, (req_quality, )), )
-                req_ext = 'webm' if self.get_param('prefer_free_formats') else 'mp4'
+                req_ext = 'webm' if self._downloader.params.get('prefer_free_formats') else 'mp4'
                 return (AllowedQuality(req_ext, (best_quality, )), )
             allowed_qualities = guess_allowed_qualities()
 
@@ -389,12 +388,12 @@ query viewClip {
 
                 # Pluralsight tracks multiple sequential calls to ViewClip API and start
                 # to return 429 HTTP errors after some time (see
-                # https://github.com/ytdl-org/youtube-dl/pull/6989). Moreover it may even lead
-                # to account ban (see https://github.com/ytdl-org/youtube-dl/issues/6842).
+                # https://github.com/ytdl-org/yt-dlp/pull/6989). Moreover it may even lead
+                # to account ban (see https://github.com/ytdl-org/yt-dlp/issues/6842).
                 # To somewhat reduce the probability of these consequences
                 # we will sleep random amount of time before each call to ViewClip.
                 self._sleep(
-                    random.randint(5, 10), display_id,
+                    random.randint(2, 5), display_id,
                     '%(video_id)s: Waiting for %(timeout)s seconds to avoid throttling')
 
                 if not viewclip:

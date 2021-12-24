@@ -1,0 +1,21 @@
+# https://developer.spotify.com/documentation/web-api/reference/
+#
+#                                                          https://api.spotify.com/v1/recommendations
+# https://open.spotify.com/browse/featured                 https://api.spotify.com/v1/browse/featured-playlists
+# https://open.spotify.com/browse/podcasts
+    # https://open.spotify.com/show/3IM0lmZxpFAY7CwMuv9H4g
+# https://open.spotify.com/browse/charts                   https://api.spotify.com/v1/views/discover-page?content_limit=12&locale=en&platform=web&country=US&timestamp=2019-08-31T04:53:36.843&types=album%2Cplaylist%2Cartist%2Cshow%2Cstation&limit=10&offset=0
+# https://open.spotify.com/browse/genres                   https://api.spotify.com/v1/browse/categories
+    # https://open.spotify.com/view/arab-page              https://api.spotify.com/v1/browse/categories/{category_id}
+# https://open.spotify.com/browse/newreleases              https://api.spotify.com/v1/browse/new-releases
+# https://open.spotify.com/browse/discover                 https://api.spotify.com/v1/views/discover-page?content_limit=12&locale=en&platform=web&country=US&timestamp=2019-08-31T04:53:36.843&types=album%2Cplaylist%2Cartist%2Cshow%2Cstation&limit=10&offset=0
+# https://open.spotify.com/search/lady                     https://api.spotify.com/v1/search
+    # https://open.spotify.com/search/lady/artists         https://api.spotify.com/v1/artists/{id}
+    # https://open.spotify.com/search/lady/songs           https://api.spotify.com/v1/tracks/{id}
+    # https://open.spotify.com/search/lady/albums          https://api.spotify.com/v1/albums/{id}
+    # https://open.spotify.com/search/lady/playlists       https://api.spotify.com/v1/playlists/{playlist_id}
+    # https://open.spotify.com/search/lady/episodes        https://api.spotify.com/v1/episodes/49RjMuP2JEjEM4pWSgMmVV?market=from_token
+        # https://open.spotify.com/episode/49RjMuP2JEjEM4pWSgMmVV
+    # https://open.spotify.com/search/lady/podcasts        https://api.spotify.com/v1/shows/00wEJsU0XM16HnVSu4c8hd?market=from_token
+        # https://open.spotify.com/show/00wEJsU0XM16HnVSu4c8hd
+#

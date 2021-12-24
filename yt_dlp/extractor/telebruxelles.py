@@ -69,7 +69,7 @@ class TeleBruxellesIE(InfoExtractor):
         return {
             'id': article_id or display_id,
             'display_id': display_id,
-            'title': title,
+            'title': self._live_title(title) if is_live else title,
             'description': description,
             'formats': formats,
             'is_live': is_live,

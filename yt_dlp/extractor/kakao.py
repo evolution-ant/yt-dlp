@@ -7,15 +7,14 @@ from ..compat import compat_str
 from ..utils import (
     int_or_none,
     strip_or_none,
-    traverse_obj,
     unified_timestamp,
+    update_url_query,
 )
 
 
 class KakaoIE(InfoExtractor):
     _VALID_URL = r'https?://(?:play-)?tv\.kakao\.com/(?:channel/\d+|embed/player)/cliplink/(?P<id>\d+|[^?#&]+@my)'
-    _API_BASE_TMPL = 'http://tv.kakao.com/api/v1/ft/playmeta/cliplink/%s/'
-    _CDN_API = 'https://tv.kakao.com/katz/v1/ft/cliplink/%s/readyNplay?'
+    _API_BASE_TMPL = 'http://tv.kakao.com/api/v1/ft/cliplinks/%s/'
 
     _TESTS = [{
         'url': 'http://tv.kakao.com/channel/2671005/cliplink/301965083',
@@ -46,8 +45,18 @@ class KakaoIE(InfoExtractor):
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
+        display_id = video_id.rstrip('@my')
         api_base = self._API_BASE_TMPL % video_id
-        cdn_api_base = self._CDN_API % video_id
+
+        player_header = {
+            'Referer': update_url_query(
+                'http://tv.kakao.com/embed/player/cliplink/%s' % video_id, {
+                    'service': 'kakao_tv',
+                    'autoplay': '1',
+                    'profile': 'HIGH',
+                    'wmode': 'transparent',
+                })
+        }
 
         query = {
             'player': 'monet_html5',
@@ -64,45 +73,51 @@ class KakaoIE(InfoExtractor):
                 'videoOutputList', 'width', 'height', 'kbps', 'profile', 'label'])
         }
 
-        api_json = self._download_json(
-            api_base, video_id, 'Downloading video info')
+        impress = self._download_json(
+            api_base + 'impress', display_id, 'Downloading video info',
+            query=query, headers=player_header)
 
-        clip_link = api_json['clipLink']
+        clip_link = impress['clipLink']
         clip = clip_link['clip']
 
         title = clip.get('title') or clip_link.get('displayTitle')
 
+        query['tid'] = impress.get('tid', '')
+
         formats = []
         for fmt in clip.get('videoOutputList', []):
-            profile_name = fmt.get('profile')
-            if not profile_name or profile_name == 'AUDIO':
-                continue
-            query.update({
-                'profile': profile_name,
-                'fields': '-*,url',
-            })
+            try:
+                profile_name = fmt['profile']
+                if profile_name == 'AUDIO':
+                    continue
+                query.update({
+                    'profile': profile_name,
+                    'fields': '-*,url',
+                })
+                fmt_url_json = self._download_json(
+                    api_base + 'raw/videolocation', display_id,
+                    'Downloading video URL for profile %s' % profile_name,
+                    query=query, headers=player_header, fatal=False)
 
-            fmt_url_json = self._download_json(
-                cdn_api_base, video_id,
-                'Downloading video URL for profile %s' % profile_name,
-                query=query, fatal=False)
-            fmt_url = traverse_obj(fmt_url_json, ('videoLocation', 'url'))
-            if not fmt_url:
-                continue
+                if fmt_url_json is None:
+                    continue
 
-            formats.append({
-                'url': fmt_url,
-                'format_id': profile_name,
-                'width': int_or_none(fmt.get('width')),
-                'height': int_or_none(fmt.get('height')),
-                'format_note': fmt.get('label'),
-                'filesize': int_or_none(fmt.get('filesize')),
-                'tbr': int_or_none(fmt.get('kbps')),
-            })
+                fmt_url = fmt_url_json['url']
+                formats.append({
+                    'url': fmt_url,
+                    'format_id': profile_name,
+                    'width': int_or_none(fmt.get('width')),
+                    'height': int_or_none(fmt.get('height')),
+                    'format_note': fmt.get('label'),
+                    'filesize': int_or_none(fmt.get('filesize')),
+                    'tbr': int_or_none(fmt.get('kbps')),
+                })
+            except KeyError:
+                pass
         self._sort_formats(formats)
 
         thumbs = []
-        for thumb in clip.get('clipChapterThumbnailList') or []:
+        for thumb in clip.get('clipChapterThumbnailList', []):
             thumbs.append({
                 'url': thumb.get('thumbnailUrl'),
                 'id': compat_str(thumb.get('timeInSec')),
@@ -116,10 +131,10 @@ class KakaoIE(InfoExtractor):
             })
 
         return {
-            'id': video_id,
+            'id': display_id,
             'title': title,
             'description': strip_or_none(clip.get('description')),
-            'uploader': traverse_obj(clip_link, ('channel', 'name')),
+            'uploader': clip_link.get('channel', {}).get('name'),
             'uploader_id': clip_link.get('channelId'),
             'thumbnails': thumbs,
             'timestamp': unified_timestamp(clip_link.get('createTime')),

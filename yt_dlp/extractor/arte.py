@@ -6,11 +6,11 @@ import re
 from .common import InfoExtractor
 from ..compat import (
     compat_str,
+    compat_urlparse,
 )
 from ..utils import (
     ExtractorError,
     int_or_none,
-    parse_qs,
     qualities,
     try_get,
     unified_strdate,
@@ -49,7 +49,7 @@ class ArteTVIE(ArteTVBaseIE):
     }]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('id')
         lang = mobj.group('lang') or mobj.group('lang_2')
 
@@ -150,6 +150,7 @@ class ArteTVIE(ArteTVBaseIE):
 
             format = {
                 'format_id': format_id,
+                'preference': -10 if f.get('videoFormat') == 'M3U8' else None,
                 'language_preference': lang_pref,
                 'format_note': '%s, %s' % (f.get('versionCode'), f.get('versionLibelle')),
                 'width': int_or_none(f.get('width')),
@@ -167,14 +168,12 @@ class ArteTVIE(ArteTVBaseIE):
 
             formats.append(format)
 
-        # For this extractor, quality only represents the relative quality
-        # with respect to other formats with the same resolution
-        self._sort_formats(formats, ('res', 'quality'))
+        self._sort_formats(formats)
 
         return {
             'id': player_info.get('VID') or video_id,
             'title': title,
-            'description': player_info.get('VDE') or player_info.get('V7T'),
+            'description': player_info.get('VDE'),
             'upload_date': unified_strdate(upload_date_str),
             'thumbnail': player_info.get('programImage') or player_info.get('VTU', {}).get('IUR'),
             'formats': formats,
@@ -204,7 +203,7 @@ class ArteTVEmbedIE(InfoExtractor):
             webpage)]
 
     def _real_extract(self, url):
-        qs = parse_qs(url)
+        qs = compat_urlparse.parse_qs(compat_urlparse.urlparse(url).query)
         json_url = qs['json_url'][0]
         video_id = ArteTVIE._match_id(json_url)
         return self.url_result(
@@ -227,7 +226,7 @@ class ArteTVPlaylistIE(ArteTVBaseIE):
     }]
 
     def _real_extract(self, url):
-        lang, playlist_id = self._match_valid_url(url).groups()
+        lang, playlist_id = re.match(self._VALID_URL, url).groups()
         collection = self._download_json(
             '%s/collectionData/%s/%s?source=videos'
             % (self._API_BASE, lang, playlist_id), playlist_id)

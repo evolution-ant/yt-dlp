@@ -77,7 +77,7 @@ class SohuIE(InfoExtractor):
         'info_dict': {
             'id': '78932792',
             'ext': 'mp4',
-            'title': 'youtube-dl testing video',
+            'title': 'yt-dlp testing video',
         },
         'params': {
             'skip_download': True
@@ -97,7 +97,7 @@ class SohuIE(InfoExtractor):
                 'Downloading JSON data for %s' % vid_id,
                 headers=self.geo_verification_headers())
 
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('id')
         mytv = mobj.group('mytv') is not None
 

@@ -11,12 +11,12 @@ from ..compat import (
     compat_etree_fromstring,
     compat_HTTPError,
     compat_parse_qs,
+    compat_urllib_parse_urlparse,
     compat_urlparse,
     compat_xml_parse_error,
 )
 from ..utils import (
     clean_html,
-    dict_get,
     extract_attributes,
     ExtractorError,
     find_xpath_attr,
@@ -26,10 +26,8 @@ from ..utils import (
     js_to_json,
     mimetype2ext,
     parse_iso8601,
-    parse_qs,
     smuggle_url,
     str_or_none,
-    try_get,
     unescapeHTML,
     unsmuggle_url,
     UnsupportedError,
@@ -131,7 +129,7 @@ class BrightcoveLegacyIE(InfoExtractor):
             'skip': 'Unsupported URL',
         },
         {
-            # playlist with 'playlistTab' (https://github.com/ytdl-org/youtube-dl/issues/9965)
+            # playlist with 'playlistTab' (https://github.com/ytdl-org/yt-dlp/issues/9965)
             'url': 'http://c.brightcove.com/services/json/experience/runtime/?command=get_programming_for_experience&playerKey=AQ%7E%7E,AAABXlLMdok%7E,NJ4EoMlZ4rZdx9eU1rkMVd8EaYPBBUlg',
             'info_dict': {
                 'id': '1522758701001',
@@ -155,10 +153,10 @@ class BrightcoveLegacyIE(InfoExtractor):
         <object class="BrightcoveExperience">{params}</object>
         """
 
-        # Fix up some stupid HTML, see https://github.com/ytdl-org/youtube-dl/issues/1553
+        # Fix up some stupid HTML, see https://github.com/ytdl-org/yt-dlp/issues/1553
         object_str = re.sub(r'(<param(?:\s+[a-zA-Z0-9_]+="[^"]*")*)>',
                             lambda m: m.group(1) + '/>', object_str)
-        # Fix up some stupid XML, see https://github.com/ytdl-org/youtube-dl/issues/1608
+        # Fix up some stupid XML, see https://github.com/ytdl-org/yt-dlp/issues/1608
         object_str = object_str.replace('<--', '<!--')
         # remove namespace to simplify extraction
         object_str = re.sub(r'(<object[^>]*)(xmlns=".*?")', r'\1', object_str)
@@ -178,7 +176,7 @@ class BrightcoveLegacyIE(InfoExtractor):
             flashvars = {}
 
         data_url = object_doc.attrib.get('data', '')
-        data_url_params = parse_qs(data_url)
+        data_url_params = compat_parse_qs(compat_urllib_parse_urlparse(data_url).query)
 
         def find_param(name):
             if name in flashvars:
@@ -291,7 +289,7 @@ class BrightcoveLegacyIE(InfoExtractor):
         url = re.sub(r'(?<=[?&])(videoI(d|D)|idVideo|bctid)', '%40videoPlayer', url)
         # Change bckey (used by bcove.me urls) to playerKey
         url = re.sub(r'(?<=[?&])bckey', 'playerKey', url)
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         query_str = mobj.group('query')
         query = compat_urlparse.parse_qs(query_str)
 
@@ -472,23 +470,23 @@ class BrightcoveNewIE(AdobePassIE):
     def _parse_brightcove_metadata(self, json_data, video_id, headers={}):
         title = json_data['name'].strip()
 
-        formats, subtitles = [], {}
-        sources = json_data.get('sources') or []
-        for source in sources:
+        formats = []
+        for source in json_data.get('sources', []):
             container = source.get('container')
             ext = mimetype2ext(source.get('type'))
             src = source.get('src')
-            if ext == 'm3u8' or container == 'M2TS':
+            # https://support.brightcove.com/playback-api-video-fields-reference#key_systems_object
+            if ext == 'ism' or container == 'WVM' or source.get('key_systems'):
+                continue
+            elif ext == 'm3u8' or container == 'M2TS':
                 if not src:
                     continue
-                fmts, subs = self._extract_m3u8_formats_and_subtitles(
-                    src, video_id, 'mp4', 'm3u8_native', m3u8_id='hls', fatal=False)
-                subtitles = self._merge_subtitles(subtitles, subs)
+                formats.extend(self._extract_m3u8_formats(
+                    src, video_id, 'mp4', 'm3u8_native', m3u8_id='hls', fatal=False))
             elif ext == 'mpd':
                 if not src:
                     continue
-                fmts, subs = self._extract_mpd_formats_and_subtitles(src, video_id, 'dash', fatal=False)
-                subtitles = self._merge_subtitles(subtitles, subs)
+                formats.extend(self._extract_mpd_formats(src, video_id, 'dash', fatal=False))
             else:
                 streaming_src = source.get('streaming_src')
                 stream_name, app_name = source.get('stream_name'), source.get('app_name')
@@ -534,26 +532,28 @@ class BrightcoveNewIE(AdobePassIE):
                         'play_path': stream_name,
                         'format_id': build_format_id('rtmp'),
                     })
-                fmts = [f]
-
-            # https://support.brightcove.com/playback-api-video-fields-reference#key_systems_object
-            if container == 'WVM' or source.get('key_systems') or ext == 'ism':
-                for f in fmts:
-                    f['has_drm'] = True
-            formats.extend(fmts)
-
+                formats.append(f)
         if not formats:
-            errors = json_data.get('errors')
-            if errors:
-                error = errors[0]
-                self.raise_no_formats(
-                    error.get('message') or error.get('error_subcode') or error['error_code'], expected=True)
+            # for sonyliv.com DRM protected videos
+            s3_source_url = json_data.get('custom_fields', {}).get('s3sourceurl')
+            if s3_source_url:
+                formats.append({
+                    'url': s3_source_url,
+                    'format_id': 'source',
+                })
+
+        errors = json_data.get('errors')
+        if not formats and errors:
+            error = errors[0]
+            raise ExtractorError(
+                error.get('message') or error.get('error_subcode') or error['error_code'], expected=True)
 
         self._sort_formats(formats)
 
         for f in formats:
             f.setdefault('http_headers', {}).update(headers)
 
+        subtitles = {}
         for text_track in json_data.get('text_tracks', []):
             if text_track.get('kind') != 'captions':
                 continue
@@ -571,19 +571,11 @@ class BrightcoveNewIE(AdobePassIE):
         if duration is not None and duration <= 0:
             is_live = True
 
-        common_res = [(160, 90), (320, 180), (480, 720), (640, 360), (768, 432), (1024, 576), (1280, 720), (1366, 768), (1920, 1080)]
-        thumb_base_url = dict_get(json_data, ('poster', 'thumbnail'))
-        thumbnails = [{
-            'url': re.sub(r'\d+x\d+', f'{w}x{h}', thumb_base_url),
-            'width': w,
-            'height': h,
-        } for w, h in common_res] if thumb_base_url else None
-
         return {
             'id': video_id,
-            'title': title,
+            'title': self._live_title(title) if is_live else title,
             'description': clean_html(json_data.get('description')),
-            'thumbnails': thumbnails,
+            'thumbnail': json_data.get('thumbnail') or json_data.get('poster'),
             'duration': duration,
             'timestamp': parse_iso8601(json_data.get('published_at')),
             'uploader_id': json_data.get('account_id'),
@@ -600,7 +592,7 @@ class BrightcoveNewIE(AdobePassIE):
             'ip_blocks': smuggled_data.get('geo_ip_blocks'),
         })
 
-        account_id, player_id, embed, content_type, video_id = self._match_valid_url(url).groups()
+        account_id, player_id, embed, content_type, video_id = re.match(self._VALID_URL, url).groups()
 
         policy_key_id = '%s_%s' % (account_id, player_id)
         policy_key = self._downloader.cache.load('brightcove', policy_key_id)
@@ -608,27 +600,24 @@ class BrightcoveNewIE(AdobePassIE):
         store_pk = lambda x: self._downloader.cache.store('brightcove', policy_key_id, x)
 
         def extract_policy_key():
-            base_url = 'http://players.brightcove.net/%s/%s_%s/' % (account_id, player_id, embed)
-            config = self._download_json(
-                base_url + 'config.json', video_id, fatal=False) or {}
-            policy_key = try_get(
-                config, lambda x: x['video_cloud']['policy_key'])
-            if not policy_key:
-                webpage = self._download_webpage(
-                    base_url + 'index.min.js', video_id)
+            webpage = self._download_webpage(
+                'http://players.brightcove.net/%s/%s_%s/index.min.js'
+                % (account_id, player_id, embed), video_id)
 
-                catalog = self._search_regex(
-                    r'catalog\(({.+?})\);', webpage, 'catalog', default=None)
+            policy_key = None
+
+            catalog = self._search_regex(
+                r'catalog\(({.+?})\);', webpage, 'catalog', default=None)
+            if catalog:
+                catalog = self._parse_json(
+                    js_to_json(catalog), video_id, fatal=False)
                 if catalog:
-                    catalog = self._parse_json(
-                        js_to_json(catalog), video_id, fatal=False)
-                    if catalog:
-                        policy_key = catalog.get('policyKey')
+                    policy_key = catalog.get('policyKey')
 
-                if not policy_key:
-                    policy_key = self._search_regex(
-                        r'policyKey\s*:\s*(["\'])(?P<pk>.+?)\1',
-                        webpage, 'policy key', group='pk')
+            if not policy_key:
+                policy_key = self._search_regex(
+                    r'policyKey\s*:\s*(["\'])(?P<pk>.+?)\1',
+                    webpage, 'policy key', group='pk')
 
             store_pk(policy_key)
             return policy_key

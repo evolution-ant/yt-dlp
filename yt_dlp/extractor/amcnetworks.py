@@ -1,8 +1,6 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import re
-
 from .theplatform import ThePlatformIE
 from ..utils import (
     int_or_none,
@@ -13,22 +11,25 @@ from ..utils import (
 
 
 class AMCNetworksIE(ThePlatformIE):
-    _VALID_URL = r'https?://(?:www\.)?(?P<site>amc|bbcamerica|ifc|(?:we|sundance)tv)\.com/(?P<id>(?:movies|shows(?:/[^/]+)+)/[^/?#&]+)'
+    _VALID_URL = r'https?://(?:www\.)?(?:amc|bbcamerica|ifc|(?:we|sundance)tv)\.com/(?:movies|shows(?:/[^/]+)+)/(?P<id>[^/?#]+)'
     _TESTS = [{
-        'url': 'https://www.bbcamerica.com/shows/the-graham-norton-show/videos/tina-feys-adorable-airline-themed-family-dinner--51631',
+        'url': 'http://www.ifc.com/shows/maron/season-04/episode-01/step-1',
+        'md5': '',
         'info_dict': {
-            'id': '4Lq1dzOnZGt0',
+            'id': 's3MX01Nl4vPH',
             'ext': 'mp4',
-            'title': "The Graham Norton Show - Season 28 - Tina Fey's Adorable Airline-Themed Family Dinner",
-            'description': "It turns out child stewardesses are very generous with the wine! All-new episodes of 'The Graham Norton Show' premiere Fridays at 11/10c on BBC America.",
-            'upload_date': '20201120',
-            'timestamp': 1605904350,
+            'title': 'Maron - Season 4 - Step 1',
+            'description': 'In denial about his current situation, Marc is reluctantly convinced by his friends to enter rehab. Starring Marc Maron and Constance Zimmer.',
+            'age_limit': 17,
+            'upload_date': '20160505',
+            'timestamp': 1462468831,
             'uploader': 'AMCN',
         },
         'params': {
             # m3u8 download
             'skip_download': True,
         },
+        'skip': 'Requires TV provider accounts',
     }, {
         'url': 'http://www.bbcamerica.com/shows/the-hunt/full-episodes/season-1/episode-01-the-hardest-challenge',
         'only_matching': True,
@@ -54,54 +55,32 @@ class AMCNetworksIE(ThePlatformIE):
         'url': 'https://www.sundancetv.com/shows/riviera/full-episodes/season-1/episode-01-episode-1',
         'only_matching': True,
     }]
-    _REQUESTOR_ID_MAP = {
-        'amc': 'AMC',
-        'bbcamerica': 'BBCA',
-        'ifc': 'IFC',
-        'sundancetv': 'SUNDANCE',
-        'wetv': 'WETV',
-    }
 
     def _real_extract(self, url):
-        site, display_id = self._match_valid_url(url).groups()
-        requestor_id = self._REQUESTOR_ID_MAP[site]
-        page_data = self._download_json(
-            'https://content-delivery-gw.svc.ds.amcn.com/api/v2/content/amcn/%s/url/%s'
-            % (requestor_id.lower(), display_id), display_id)['data']
-        properties = page_data.get('properties') or {}
+        display_id = self._match_id(url)
+        webpage = self._download_webpage(url, display_id)
         query = {
             'mbr': 'true',
             'manifest': 'm3u',
         }
-
-        video_player_count = 0
-        try:
-            for v in page_data['children']:
-                if v.get('type') == 'video-player':
-                    releasePid = v['properties']['currentVideo']['meta']['releasePid']
-                    tp_path = 'M_UwQC/' + releasePid
-                    media_url = 'https://link.theplatform.com/s/' + tp_path
-                    video_player_count += 1
-        except KeyError:
-            pass
-        if video_player_count > 1:
-            self.report_warning(
-                'The JSON data has %d video players. Only one will be extracted' % video_player_count)
-
-        # Fall back to videoPid if releasePid not found.
-        # TODO: Fall back to videoPid if releasePid manifest uses DRM.
-        if not video_player_count:
-            tp_path = 'M_UwQC/media/' + properties['videoPid']
-            media_url = 'https://link.theplatform.com/s/' + tp_path
-
-        theplatform_metadata = self._download_theplatform_metadata(tp_path, display_id)
+        media_url = self._search_regex(
+            r'window\.platformLinkURL\s*=\s*[\'"]([^\'"]+)',
+            webpage, 'media url')
+        theplatform_metadata = self._download_theplatform_metadata(self._search_regex(
+            r'link\.theplatform\.com/s/([^?]+)',
+            media_url, 'theplatform_path'), display_id)
         info = self._parse_theplatform_metadata(theplatform_metadata)
         video_id = theplatform_metadata['pid']
         title = theplatform_metadata['title']
         rating = try_get(
             theplatform_metadata, lambda x: x['ratings'][0]['rating'])
-        video_category = properties.get('videoCategory')
-        if video_category and video_category.endswith('-Auth'):
+        auth_required = self._search_regex(
+            r'window\.authRequired\s*=\s*(true|false);',
+            webpage, 'auth required')
+        if auth_required == 'true':
+            requestor_id = self._search_regex(
+                r'window\.requestor_id\s*=\s*[\'"]([^\'"]+)',
+                webpage, 'requestor id')
             resource = self._get_mvpd_resource(
                 requestor_id, title, video_id, rating)
             query['auth'] = self._extract_mvpd_auth(
@@ -110,41 +89,30 @@ class AMCNetworksIE(ThePlatformIE):
         formats, subtitles = self._extract_theplatform_smil(
             media_url, video_id)
         self._sort_formats(formats)
-
-        thumbnails = []
-        thumbnail_urls = [properties.get('imageDesktop')]
-        if 'thumbnail' in info:
-            thumbnail_urls.append(info.pop('thumbnail'))
-        for thumbnail_url in thumbnail_urls:
-            if not thumbnail_url:
-                continue
-            mobj = re.search(r'(\d+)x(\d+)', thumbnail_url)
-            thumbnails.append({
-                'url': thumbnail_url,
-                'width': int(mobj.group(1)) if mobj else None,
-                'height': int(mobj.group(2)) if mobj else None,
-            })
-
         info.update({
-            'age_limit': parse_age_limit(rating),
-            'formats': formats,
             'id': video_id,
             'subtitles': subtitles,
-            'thumbnails': thumbnails,
+            'formats': formats,
+            'age_limit': parse_age_limit(parse_age_limit(rating)),
         })
         ns_keys = theplatform_metadata.get('$xmlns', {}).keys()
         if ns_keys:
             ns = list(ns_keys)[0]
-            episode = theplatform_metadata.get(ns + '$episodeTitle') or None
-            episode_number = int_or_none(
-                theplatform_metadata.get(ns + '$episode'))
+            series = theplatform_metadata.get(ns + '$show')
             season_number = int_or_none(
                 theplatform_metadata.get(ns + '$season'))
-            series = theplatform_metadata.get(ns + '$show') or None
+            episode = theplatform_metadata.get(ns + '$episodeTitle')
+            episode_number = int_or_none(
+                theplatform_metadata.get(ns + '$episode'))
+            if season_number:
+                title = 'Season %d - %s' % (season_number, title)
+            if series:
+                title = '%s - %s' % (series, title)
             info.update({
+                'title': title,
+                'series': series,
+                'season_number': season_number,
                 'episode': episode,
                 'episode_number': episode_number,
-                'season_number': season_number,
-                'series': series,
             })
         return info

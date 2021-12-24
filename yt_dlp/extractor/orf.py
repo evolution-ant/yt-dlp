@@ -11,7 +11,6 @@ from ..utils import (
     float_or_none,
     HEADRequest,
     int_or_none,
-    join_nonempty,
     orderedSet,
     remove_end,
     str_or_none,
@@ -83,7 +82,12 @@ class ORFTVthekIE(InfoExtractor):
                 src = url_or_none(fd.get('src'))
                 if not src:
                     continue
-                format_id = join_nonempty('delivery', 'quality', 'quality_string', from_dict=fd)
+                format_id_list = []
+                for key in ('delivery', 'quality', 'quality_string'):
+                    value = fd.get(key)
+                    if value:
+                        format_id_list.append(value)
+                format_id = '-'.join(format_id_list)
                 ext = determine_ext(src)
                 if ext == 'm3u8':
                     m3u8_formats = self._extract_m3u8_formats(
@@ -94,9 +98,6 @@ class ORFTVthekIE(InfoExtractor):
                 elif ext == 'f4m':
                     formats.extend(self._extract_f4m_formats(
                         src, video_id, f4m_id=format_id, fatal=False))
-                elif ext == 'mpd':
-                    formats.extend(self._extract_mpd_formats(
-                        src, video_id, mpd_id=format_id, fatal=False))
                 else:
                     formats.append({
                         'format_id': format_id,
@@ -139,25 +140,6 @@ class ORFTVthekIE(InfoExtractor):
                 })
 
             upload_date = unified_strdate(sd.get('created_date'))
-
-            thumbnails = []
-            preview = sd.get('preview_image_url')
-            if preview:
-                thumbnails.append({
-                    'id': 'preview',
-                    'url': preview,
-                    'preference': 0,
-                })
-            image = sd.get('image_full_url')
-            if not image and len(data_jsb) == 1:
-                image = self._og_search_thumbnail(webpage)
-            if image:
-                thumbnails.append({
-                    'id': 'full',
-                    'url': image,
-                    'preference': 1,
-                })
-
             entries.append({
                 '_type': 'video',
                 'id': video_id,
@@ -167,7 +149,7 @@ class ORFTVthekIE(InfoExtractor):
                 'description': sd.get('description'),
                 'duration': int_or_none(sd.get('duration_in_seconds')),
                 'upload_date': upload_date,
-                'thumbnails': thumbnails,
+                'thumbnail': sd.get('image_full_url'),
             })
 
         return {
@@ -179,7 +161,7 @@ class ORFTVthekIE(InfoExtractor):
 
 class ORFRadioIE(InfoExtractor):
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         show_date = mobj.group('date')
         show_id = mobj.group('show')
 
@@ -200,7 +182,7 @@ class ORFRadioIE(InfoExtractor):
             duration = end - start if end and start else None
             entries.append({
                 'id': loop_stream_id.replace('.mp3', ''),
-                'url': 'https://loopstream01.apa.at/?channel=%s&id=%s' % (self._LOOP_STATION, loop_stream_id),
+                'url': 'http://loopstream01.apa.at/?channel=%s&id=%s' % (self._LOOP_STATION, loop_stream_id),
                 'title': title,
                 'description': clean_html(data.get('subtitle')),
                 'duration': duration,

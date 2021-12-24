@@ -10,12 +10,15 @@ import hashlib
 
 from .once import OnceIE
 from .adobepass import AdobePassIE
+from ..compat import (
+    compat_parse_qs,
+    compat_urllib_parse_urlparse,
+)
 from ..utils import (
     determine_ext,
     ExtractorError,
     float_or_none,
     int_or_none,
-    parse_qs,
     sanitized_Request,
     unsmuggle_url,
     update_url_query,
@@ -206,7 +209,7 @@ class ThePlatformIE(ThePlatformBaseIE, AdobePassIE):
             return [m.group('url')]
 
         # Are whitespaces ignored in URLs?
-        # https://github.com/ytdl-org/youtube-dl/issues/12044
+        # https://github.com/ytdl-org/yt-dlp/issues/12044
         matches = re.findall(
             r'(?s)<(?:iframe|script)[^>]+src=(["\'])((?:https?:)?//player\.theplatform\.com/p/.+?)\1', webpage)
         if matches:
@@ -231,11 +234,8 @@ class ThePlatformIE(ThePlatformBaseIE, AdobePassIE):
 
     def _real_extract(self, url):
         url, smuggled_data = unsmuggle_url(url, {})
-        self._initialize_geo_bypass({
-            'countries': smuggled_data.get('geo_countries'),
-        })
 
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         provider_id = mobj.group('provider_id')
         video_id = mobj.group('id')
 
@@ -247,7 +247,7 @@ class ThePlatformIE(ThePlatformBaseIE, AdobePassIE):
             path += mobj.group('media')
         path += video_id
 
-        qs_dict = parse_qs(url)
+        qs_dict = compat_parse_qs(compat_urllib_parse_urlparse(url).query)
         if 'guid' in qs_dict:
             webpage = self._download_webpage(url, video_id)
             scripts = re.findall(r'<script[^>]+src="([^"]+)"', webpage)
@@ -271,7 +271,7 @@ class ThePlatformIE(ThePlatformBaseIE, AdobePassIE):
 
         if smuggled_data.get('force_smil_url', False):
             smil_url = url
-        # Explicitly specified SMIL (see https://github.com/ytdl-org/youtube-dl/issues/7385)
+        # Explicitly specified SMIL (see https://github.com/ytdl-org/yt-dlp/issues/7385)
         elif '/guid/' in url:
             headers = {}
             source_url = smuggled_data.get('source_url')
@@ -356,7 +356,7 @@ class ThePlatformFeedIE(ThePlatformBaseIE):
             if first_video_id is None:
                 first_video_id = cur_video_id
                 duration = float_or_none(item.get('plfile$duration'))
-            file_asset_types = item.get('plfile$assetTypes') or parse_qs(smil_url)['assetTypes']
+            file_asset_types = item.get('plfile$assetTypes') or compat_parse_qs(compat_urllib_parse_urlparse(smil_url).query)['assetTypes']
             for asset_type in file_asset_types:
                 if asset_type in asset_types:
                     continue
@@ -401,7 +401,7 @@ class ThePlatformFeedIE(ThePlatformBaseIE):
         return ret
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
 
         video_id = mobj.group('id')
         provider_id = mobj.group('provider_id')

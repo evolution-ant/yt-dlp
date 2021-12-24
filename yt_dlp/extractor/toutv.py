@@ -73,8 +73,8 @@ class TouTvIE(RadioCanadaIE):
                 'version': 4,
             })
         # IsDrm does not necessarily mean the video is DRM protected (see
-        # https://github.com/ytdl-org/youtube-dl/issues/13994).
-        if not self.get_param('allow_unplayable_formats') and metadata.get('IsDrm'):
+        # https://github.com/ytdl-org/yt-dlp/issues/13994).
+        if metadata.get('IsDrm'):
             self.report_warning('This video is probably DRM protected.', path)
         video_id = metadata['IdMedia']
         details = metadata['Details']

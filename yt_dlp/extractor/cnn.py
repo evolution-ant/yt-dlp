@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from .turner import TurnerBaseIE
@@ -87,7 +88,7 @@ class CNNIE(TurnerBaseIE):
         return None
 
     def _real_extract(self, url):
-        sub_domain, path, page_title = self._match_valid_url(url).groups()
+        sub_domain, path, page_title = re.match(self._VALID_URL, url).groups()
         if sub_domain not in ('money', 'edition'):
             sub_domain = 'edition'
         config = self._CONFIG[sub_domain]
@@ -95,10 +96,7 @@ class CNNIE(TurnerBaseIE):
             config['data_src'] % path, page_title, {
                 'default': {
                     'media_src': config['media_src'],
-                },
-                'f4m': {
-                    'host': 'cnn-vh.akamaihd.net',
-                },
+                }
             })
 
 

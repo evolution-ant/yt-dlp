@@ -20,7 +20,7 @@ class StreamcloudIE(InfoExtractor):
         'info_dict': {
             'id': 'skp9j99s4bpz',
             'ext': 'mp4',
-            'title': 'youtube-dl test video  \'/\\ ä ↭',
+            'title': 'yt-dlp test video  \'/\\ ä ↭',
         },
         'skip': 'Only available from the EU'
     }, {

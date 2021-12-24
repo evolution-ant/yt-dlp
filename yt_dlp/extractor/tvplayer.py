@@ -80,7 +80,7 @@ class TVPlayerIE(InfoExtractor):
         return {
             'id': resource_id,
             'display_id': display_id,
-            'title': title,
+            'title': self._live_title(title),
             'formats': formats,
             'is_live': True,
         }

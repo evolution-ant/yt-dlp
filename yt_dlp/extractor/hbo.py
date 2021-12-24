@@ -173,3 +173,45 @@ class HBOIE(HBOBaseIE):
         location_path = self._parse_json(self._html_search_regex(
             r'data-state="({.+?})"', webpage, 'state'), display_id)['video']['locationUrl']
         return self._extract_info(urljoin(url, location_path), display_id)
+
+
+
+class HBONEWIE(HBOBaseIE):
+    IE_NAME = 'hbo'
+    _VALID_URL = r'https?://(?:www\.)?hbo\.com/(?P<id>[^/?#]+)'
+    _TEST = {
+        'url': 'https://www.hbo.com/video/game-of-thrones/seasons/season-8/videos/trailer',
+        'md5': '8126210656f433c452a21367f9ad85b3',
+        'info_dict': {
+            'id': '22113301',
+            'ext': 'mp4',
+            'title': 'Game of Thrones - Trailer',
+        },
+        'expected_warnings': ['Unknown MIME type application/mp4 in DASH manifest'],
+    }
+
+    def _real_extract(self, url):
+        display_id = self._match_id(url)
+        webpage = self._download_webpage(url, display_id)
+        count = webpage.count('locationUrl')
+        entries = []
+
+        location_paths = re.findall("locationUrl&quot;:&quot;(.+?)&quot;,&quot;",webpage)
+        for location_path in location_paths:
+            info = self._extract_info(urljoin(url, location_path), display_id)
+            title = info["series"]
+            entry ={
+                "formats":info['formats'],
+                "subtitles":info['subtitles'],
+                "thumbnail":info['thumbnails'][0]["url"],
+                "id":info['id'],
+                "title":info['title']
+            }
+            entries.append(entry)
+        video_info = {
+            "_type":"playlist",
+            "entries":entries,
+            "id":display_id,
+            "title":title
+        }
+        return video_info

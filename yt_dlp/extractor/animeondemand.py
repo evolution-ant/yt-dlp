@@ -8,7 +8,6 @@ from ..utils import (
     determine_ext,
     extract_attributes,
     ExtractorError,
-    join_nonempty,
     url_or_none,
     urlencode_postdata,
     urljoin,
@@ -117,6 +116,8 @@ class AnimeOnDemandIE(InfoExtractor):
             r'(?s)<div[^>]+itemprop="description"[^>]*>(.+?)</div>',
             webpage, 'anime description', default=None)
 
+        entries = []
+
         def extract_info(html, video_id, num=None):
             title, description = [None] * 2
             formats = []
@@ -141,8 +142,15 @@ class AnimeOnDemandIE(InfoExtractor):
                     kind = self._search_regex(
                         r'videomaterialurl/\d+/([^/]+)/',
                         playlist_url, 'media kind', default=None)
-                    format_id = join_nonempty(lang, kind) if lang or kind else str(num)
-                    format_note = join_nonempty(kind, lang_note, delim=', ')
+                    format_id_list = []
+                    if lang:
+                        format_id_list.append(lang)
+                    if kind:
+                        format_id_list.append(kind)
+                    if not format_id_list and num is not None:
+                        format_id_list.append(compat_str(num))
+                    format_id = '-'.join(format_id_list)
+                    format_note = ', '.join(filter(None, (kind, lang_note)))
                     item_id_list = []
                     if format_id:
                         item_id_list.append(format_id)
@@ -189,10 +197,12 @@ class AnimeOnDemandIE(InfoExtractor):
                         if not file_:
                             continue
                         ext = determine_ext(file_)
-                        format_id = join_nonempty(
-                            lang, kind,
-                            'hls' if ext == 'm3u8' else None,
-                            'dash' if source.get('type') == 'video/dash' or ext == 'mpd' else None)
+                        format_id_list = [lang, kind]
+                        if ext == 'm3u8':
+                            format_id_list.append('hls')
+                        elif source.get('type') == 'video/dash' or ext == 'mpd':
+                            format_id_list.append('dash')
+                        format_id = '-'.join(filter(None, format_id_list))
                         if ext == 'm3u8':
                             file_formats = self._extract_m3u8_formats(
                                 file_, video_id, 'mp4',
@@ -223,7 +233,7 @@ class AnimeOnDemandIE(InfoExtractor):
                 self._sort_formats(info['formats'])
                 f = common_info.copy()
                 f.update(info)
-                yield f
+                entries.append(f)
 
             # Extract teaser/trailer only when full episode is not available
             if not info['formats']:
@@ -237,7 +247,7 @@ class AnimeOnDemandIE(InfoExtractor):
                         'title': m.group('title'),
                         'url': urljoin(url, m.group('href')),
                     })
-                    yield f
+                    entries.append(f)
 
         def extract_episodes(html):
             for num, episode_html in enumerate(re.findall(
@@ -265,8 +275,7 @@ class AnimeOnDemandIE(InfoExtractor):
                     'episode_number': episode_number,
                 }
 
-                for e in extract_entries(episode_html, video_id, common_info):
-                    yield e
+                extract_entries(episode_html, video_id, common_info)
 
         def extract_film(html, video_id):
             common_info = {
@@ -274,18 +283,11 @@ class AnimeOnDemandIE(InfoExtractor):
                 'title': anime_title,
                 'description': anime_description,
             }
-            for e in extract_entries(html, video_id, common_info):
-                yield e
+            extract_entries(html, video_id, common_info)
 
-        def entries():
-            has_episodes = False
-            for e in extract_episodes(webpage):
-                has_episodes = True
-                yield e
+        extract_episodes(webpage)
 
-            if not has_episodes:
-                for e in extract_film(webpage, anime_id):
-                    yield e
+        if not entries:
+            extract_film(webpage, anime_id)
 
-        return self.playlist_result(
-            entries(), anime_id, anime_title, anime_description)
+        return self.playlist_result(entries, anime_id, anime_title, anime_description)

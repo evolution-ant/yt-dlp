@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..compat import compat_HTTPError
@@ -95,7 +96,7 @@ class RadioCanadaIE(InfoExtractor):
                         return text
 
         # protectionType does not necessarily mean the video is DRM protected (see
-        # https://github.com/ytdl-org/youtube-dl/pull/18609).
+        # https://github.com/ytdl-org/yt-dlp/pull/18609).
         if get_meta('protectionType'):
             self.report_warning('This video is probably DRM protected.')
 
@@ -142,7 +143,7 @@ class RadioCanadaIE(InfoExtractor):
         }
 
     def _real_extract(self, url):
-        return self._extract_info(*self._match_valid_url(url).groups())
+        return self._extract_info(*re.match(self._VALID_URL, url).groups())
 
 
 class RadioCanadaAudioVideoIE(InfoExtractor):

@@ -12,7 +12,6 @@ from ..compat import (
 from ..utils import (
     ExtractorError,
     int_or_none,
-    join_nonempty,
     try_get,
     url_or_none,
     urlencode_postdata,
@@ -157,9 +156,15 @@ class ZattooPlatformBaseIE(InfoExtractor):
                 watch_url = url_or_none(watch.get('url'))
                 if not watch_url:
                     continue
+                format_id_list = [stream_type]
+                maxrate = watch.get('maxrate')
+                if maxrate:
+                    format_id_list.append(compat_str(maxrate))
                 audio_channel = watch.get('audio_channel')
+                if audio_channel:
+                    format_id_list.append(compat_str(audio_channel))
                 preference = 1 if audio_channel == 'A' else None
-                format_id = join_nonempty(stream_type, watch.get('maxrate'), audio_channel)
+                format_id = '-'.join(format_id_list)
                 if stream_type in ('dash', 'dash_widevine', 'dash_playready'):
                     this_formats = self._extract_mpd_formats(
                         watch_url, video_id, mpd_id=format_id, fatal=False)
@@ -177,7 +182,7 @@ class ZattooPlatformBaseIE(InfoExtractor):
                 else:
                     assert False
                 for this_format in this_formats:
-                    this_format['quality'] = preference
+                    this_format['preference'] = preference
                 formats.extend(this_formats)
         self._sort_formats(formats)
         return formats
@@ -187,7 +192,7 @@ class ZattooPlatformBaseIE(InfoExtractor):
             cid = self._extract_cid(video_id, channel_name)
             info_dict = {
                 'id': channel_name,
-                'title': channel_name,
+                'title': self._live_title(channel_name),
                 'is_live': True,
             }
         else:
@@ -212,7 +217,7 @@ class QuicklineIE(QuicklineBaseIE):
     }
 
     def _real_extract(self, url):
-        channel_name, video_id = self._match_valid_url(url).groups()
+        channel_name, video_id = re.match(self._VALID_URL, url).groups()
         return self._extract_video(channel_name, video_id)
 
 
@@ -257,7 +262,7 @@ class ZattooIE(ZattooBaseIE):
     }]
 
     def _real_extract(self, url):
-        channel_name, video_id, record_id = self._match_valid_url(url).groups()
+        channel_name, video_id, record_id = re.match(self._VALID_URL, url).groups()
         return self._extract_video(channel_name, video_id, record_id)
 
 

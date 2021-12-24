@@ -17,7 +17,7 @@ class TV4IE(InfoExtractor):
             tv4\.se/(?:[^/]+)/klipp/(?:.*)-|
             tv4play\.se/
             (?:
-                (?:program|barn)/(?:(?:[^/]+/){1,2}|(?:[^\?]+)\?video_id=)|
+                (?:program|barn)/(?:[^/]+/|(?:[^\?]+)\?video_id=)|
                 iframe/video/|
                 film/|
                 sport/|
@@ -65,10 +65,6 @@ class TV4IE(InfoExtractor):
         {
             'url': 'http://www.tv4play.se/program/farang/3922081',
             'only_matching': True,
-        },
-        {
-            'url': 'https://www.tv4play.se/program/nyheterna/avsnitt/13315940',
-            'only_matching': True,
         }
     ]
 
@@ -93,34 +89,21 @@ class TV4IE(InfoExtractor):
                 'device': 'browser',
                 'protocol': 'hls',
             })['playbackItem']['manifestUrl']
-        formats = []
-        subtitles = {}
-
-        fmts, subs = self._extract_m3u8_formats_and_subtitles(
+        formats = self._extract_m3u8_formats(
             manifest_url, video_id, 'mp4',
             'm3u8_native', m3u8_id='hls', fatal=False)
-        formats.extend(fmts)
-        subtitles = self._merge_subtitles(subtitles, subs)
-
-        fmts, subs = self._extract_mpd_formats_and_subtitles(
+        formats.extend(self._extract_mpd_formats(
             manifest_url.replace('.m3u8', '.mpd'),
-            video_id, mpd_id='dash', fatal=False)
-        formats.extend(fmts)
-        subtitles = self._merge_subtitles(subtitles, subs)
-
-        fmts = self._extract_f4m_formats(
+            video_id, mpd_id='dash', fatal=False))
+        formats.extend(self._extract_f4m_formats(
             manifest_url.replace('.m3u8', '.f4m'),
-            video_id, f4m_id='hds', fatal=False)
-        formats.extend(fmts)
-
-        fmts, subs = self._extract_ism_formats_and_subtitles(
+            video_id, f4m_id='hds', fatal=False))
+        formats.extend(self._extract_ism_formats(
             re.sub(r'\.ism/.*?\.m3u8', r'.ism/Manifest', manifest_url),
-            video_id, ism_id='mss', fatal=False)
-        formats.extend(fmts)
-        subtitles = self._merge_subtitles(subtitles, subs)
+            video_id, ism_id='mss', fatal=False))
 
         if not formats and info.get('is_geo_restricted'):
-            self.raise_geo_restricted(countries=self._GEO_COUNTRIES, metadata_available=True)
+            self.raise_geo_restricted(countries=self._GEO_COUNTRIES)
 
         self._sort_formats(formats)
 
@@ -128,7 +111,7 @@ class TV4IE(InfoExtractor):
             'id': video_id,
             'title': title,
             'formats': formats,
-            'subtitles': subtitles,
+            # 'subtitles': subtitles,
             'description': info.get('description'),
             'timestamp': parse_iso8601(info.get('broadcast_date_time')),
             'duration': int_or_none(info.get('duration')),

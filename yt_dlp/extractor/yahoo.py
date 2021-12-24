@@ -22,7 +22,6 @@ from ..utils import (
 )
 
 from .brightcove import BrightcoveNewIE
-from .youtube import YoutubeIE
 
 
 class YahooIE(InfoExtractor):
@@ -39,7 +38,6 @@ class YahooIE(InfoExtractor):
             'timestamp': 1369812016,
             'upload_date': '20130529',
         },
-        'skip': 'No longer exists',
     }, {
         'url': 'https://screen.yahoo.com/community/community-sizzle-reel-203225340.html?format=embed',
         'md5': '7993e572fac98e044588d0b5260f4352',
@@ -52,7 +50,6 @@ class YahooIE(InfoExtractor):
             'timestamp': 1406838636,
             'upload_date': '20140731',
         },
-        'skip': 'Unfortunately, this video is not available in your region',
     }, {
         'url': 'https://uk.screen.yahoo.com/editor-picks/cute-raccoon-freed-drain-using-091756545.html',
         'md5': '71298482f7c64cbb7fa064e4553ff1c1',
@@ -64,8 +61,7 @@ class YahooIE(InfoExtractor):
             'duration': 97,
             'timestamp': 1414489862,
             'upload_date': '20141028',
-        },
-        'skip': 'No longer exists',
+        }
     }, {
         'url': 'http://news.yahoo.com/video/china-moses-crazy-blues-104538833.html',
         'md5': '88e209b417f173d86186bef6e4d1f160',
@@ -124,7 +120,6 @@ class YahooIE(InfoExtractor):
             'season_number': 6,
             'episode_number': 1,
         },
-        'skip': 'No longer exists',
     }, {
         # ytwnews://cavideo/
         'url': 'https://tw.video.yahoo.com/movie-tw/單車天使-中文版預-092316541.html',
@@ -161,7 +156,7 @@ class YahooIE(InfoExtractor):
                 'id': '352CFDOQrKg',
                 'ext': 'mp4',
                 'title': 'Kyndal Inskeep "Performs the Hell Out of" Sia\'s "Elastic Heart" - The Voice Knockouts 2019',
-                'description': 'md5:7fe8e3d5806f96002e55f190d1d94479',
+                'description': 'md5:35b61e94c2ae214bc965ff4245f80d11',
                 'uploader': 'The Voice',
                 'uploader_id': 'NBCTheVoice',
                 'upload_date': '20191029',
@@ -170,7 +165,7 @@ class YahooIE(InfoExtractor):
         'params': {
             'playlistend': 2,
         },
-        'expected_warnings': ['HTTP Error 404', 'Ignoring subtitle tracks'],
+        'expected_warnings': ['HTTP Error 404'],
     }, {
         'url': 'https://malaysia.news.yahoo.com/video/bystanders-help-ontario-policeman-bust-190932818.html',
         'only_matching': True,
@@ -182,9 +177,46 @@ class YahooIE(InfoExtractor):
         'only_matching': True,
     }]
 
-    def _extract_yahoo_video(self, video_id, country):
+    def _real_extract(self, url):
+        url, country, display_id = re.match(self._VALID_URL, url).groups()
+        if not country:
+            country = 'us'
+        else:
+            country = country.split('-')[0]
+        api_base = 'https://%s.yahoo.com/_td/api/resource/' % country
+
+        for i, uuid in enumerate(['url=' + url, 'ymedia-alias=' + display_id]):
+            content = self._download_json(
+                api_base + 'content;getDetailView=true;uuids=["%s"]' % uuid,
+                display_id, 'Downloading content JSON metadata', fatal=i == 1)
+            if content:
+                item = content['items'][0]
+                break
+
+        if item.get('type') != 'video':
+            entries = []
+
+            cover = item.get('cover') or {}
+            if cover.get('type') == 'yvideo':
+                cover_url = cover.get('url')
+                if cover_url:
+                    entries.append(self.url_result(
+                        cover_url, 'Yahoo', cover.get('uuid')))
+
+            for e in item.get('body', []):
+                if e.get('type') == 'videoIframe':
+                    iframe_url = e.get('url')
+                    if not iframe_url:
+                        continue
+                    entries.append(self.url_result(iframe_url))
+
+            return self.playlist_result(
+                entries, item.get('uuid'),
+                item.get('title'), item.get('summary'))
+
+        video_id = item['uuid']
         video = self._download_json(
-            'https://%s.yahoo.com/_td/api/resource/VideoService.videos;view=full;video_ids=["%s"]' % (country, video_id),
+            api_base + 'VideoService.videos;view=full;video_ids=["%s"]' % video_id,
             video_id, 'Downloading video JSON metadata')[0]
         title = video['title']
 
@@ -244,7 +276,7 @@ class YahooIE(InfoExtractor):
                 'm3u8_native', m3u8_id='hls', fatal=False))
 
         if not formats and msg == 'geo restricted':
-            self.raise_geo_restricted(metadata_available=True)
+            self.raise_geo_restricted()
 
         self._sort_formats(formats)
 
@@ -264,8 +296,9 @@ class YahooIE(InfoExtractor):
 
         return {
             'id': video_id,
-            'title': title,
+            'title': self._live_title(title) if is_live else title,
             'formats': formats,
+            'display_id': display_id,
             'thumbnails': thumbnails,
             'description': clean_html(video.get('description')),
             'timestamp': parse_iso8601(video.get('publish_time')),
@@ -278,55 +311,6 @@ class YahooIE(InfoExtractor):
             'episode_number': int_or_none(series_info.get('episode_number')),
         }
 
-    def _real_extract(self, url):
-        url, country, display_id = self._match_valid_url(url).groups()
-        if not country:
-            country = 'us'
-        else:
-            country = country.split('-')[0]
-
-        items = self._download_json(
-            'https://%s.yahoo.com/caas/content/article' % country, display_id,
-            'Downloading content JSON metadata', query={
-                'url': url
-            })['items'][0]
-
-        item = items['data']['partnerData']
-        if item.get('type') != 'video':
-            entries = []
-
-            cover = item.get('cover') or {}
-            if cover.get('type') == 'yvideo':
-                cover_url = cover.get('url')
-                if cover_url:
-                    entries.append(self.url_result(
-                        cover_url, 'Yahoo', cover.get('uuid')))
-
-            for e in (item.get('body') or []):
-                if e.get('type') == 'videoIframe':
-                    iframe_url = e.get('url')
-                    if iframe_url:
-                        entries.append(self.url_result(iframe_url))
-
-            if item.get('type') == 'storywithleadvideo':
-                iframe_url = try_get(item, lambda x: x['meta']['player']['url'])
-                if iframe_url:
-                    entries.append(self.url_result(iframe_url))
-                else:
-                    self.report_warning("Yahoo didn't provide an iframe url for this storywithleadvideo")
-
-            if items.get('markup'):
-                entries.extend(
-                    self.url_result(yt_url) for yt_url in YoutubeIE._extract_urls(items['markup']))
-
-            return self.playlist_result(
-                entries, item.get('uuid'),
-                item.get('title'), item.get('summary'))
-
-        info = self._extract_yahoo_video(item['uuid'], country)
-        info['display_id'] = display_id
-        return info
-
 
 class YahooSearchIE(SearchInfoExtractor):
     IE_DESC = 'Yahoo screen search'
@@ -334,19 +318,35 @@ class YahooSearchIE(SearchInfoExtractor):
     IE_NAME = 'screen.yahoo:search'
     _SEARCH_KEY = 'yvsearch'
 
-    def _search_results(self, query):
+    def _get_n_results(self, query, n):
+        """Get a specified number of results for a query"""
+        entries = []
         for pagenum in itertools.count(0):
             result_url = 'http://video.search.yahoo.com/search/?p=%s&fr=screen&o=js&gs=0&b=%d' % (compat_urllib_parse.quote_plus(query), pagenum * 30)
             info = self._download_json(result_url, query,
                                        note='Downloading results page ' + str(pagenum + 1))
-            yield from (self.url_result(result['rurl']) for result in info['results'])
-            if info['m']['last'] >= info['m']['total'] - 1:
+            m = info['m']
+            results = info['results']
+
+            for (i, r) in enumerate(results):
+                if (pagenum * 30) + i >= n:
+                    break
+                mobj = re.search(r'(?P<url>screen\.yahoo\.com/.*?-\d*?\.html)"', r)
+                e = self.url_result('http://' + mobj.group('url'), 'Yahoo')
+                entries.append(e)
+            if (pagenum * 30 + i >= n) or (m['last'] >= (m['total'] - 1)):
                 break
+
+        return {
+            '_type': 'playlist',
+            'id': query,
+            'entries': entries,
+        }
 
 
 class YahooGyaOPlayerIE(InfoExtractor):
     IE_NAME = 'yahoo:gyao:player'
-    _VALID_URL = r'https?://(?:gyao\.yahoo\.co\.jp/(?:player|episode(?:/[^/]+)?)|streaming\.yahoo\.co\.jp/c/y)/(?P<id>\d+/v\d+/v\d+|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})'
+    _VALID_URL = r'https?://(?:gyao\.yahoo\.co\.jp/(?:player|episode/[^/]+)|streaming\.yahoo\.co\.jp/c/y)/(?P<id>\d+/v\d+/v\d+|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})'
     _TESTS = [{
         'url': 'https://gyao.yahoo.co.jp/player/00998/v00818/v0000000000000008564/',
         'info_dict': {
@@ -367,9 +367,6 @@ class YahooGyaOPlayerIE(InfoExtractor):
         'only_matching': True,
     }, {
         'url': 'https://gyao.yahoo.co.jp/episode/%E3%81%8D%E3%81%AE%E3%81%86%E4%BD%95%E9%A3%9F%E3%81%B9%E3%81%9F%EF%BC%9F%20%E7%AC%AC2%E8%A9%B1%202019%2F4%2F12%E6%94%BE%E9%80%81%E5%88%86/5cb02352-b725-409e-9f8d-88f947a9f682',
-        'only_matching': True,
-    }, {
-        'url': 'https://gyao.yahoo.co.jp/episode/5fa1226c-ef8d-4e93-af7a-fd92f4e30597',
         'only_matching': True,
     }]
     _GEO_BYPASS = False
@@ -511,7 +508,7 @@ class YahooJapanNewsIE(InfoExtractor):
         return formats
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         host = mobj.group('host')
         display_id = mobj.group('id') or host
 

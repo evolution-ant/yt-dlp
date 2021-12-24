@@ -51,7 +51,7 @@ class VKBaseIE(InfoExtractor):
         self._apply_first_set_cookie_header(url_handle, 'remixlhk')
 
         login_page = self._download_webpage(
-            'https://vk.com/login', None,
+            'https://login.vk.com/?act=login', None,
             note='Logging in',
             data=urlencode_postdata(login_form))
 
@@ -300,15 +300,8 @@ class VKIE(VKBaseIE):
             'only_matching': True,
         }]
 
-    @staticmethod
-    def _extract_sibnet_urls(webpage):
-        # https://help.sibnet.ru/?sibnet_video_embed
-        return [unescapeHTML(mobj.group('url')) for mobj in re.finditer(
-            r'<iframe\b[^>]+\bsrc=(["\'])(?P<url>(?:https?:)?//video\.sibnet\.ru/shell\.php\?.*?\bvideoid=\d+.*?)\1',
-            webpage)]
-
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('videoid')
 
         mv_data = {}
@@ -415,10 +408,6 @@ class VKIE(VKBaseIE):
         if odnoklassniki_url:
             return self.url_result(odnoklassniki_url, OdnoklassnikiIE.ie_key())
 
-        sibnet_urls = self._extract_sibnet_urls(info_page)
-        if sibnet_urls:
-            return self.url_result(sibnet_urls[0])
-
         m_opts = re.search(r'(?s)var\s+opts\s*=\s*({.+?});', info_page)
         if m_opts:
             m_opts_url = re.search(r"url\s*:\s*'((?!/\b)[^']+)", m_opts.group(1))
@@ -434,6 +423,8 @@ class VKIE(VKBaseIE):
         # 2 = live
         # 3 = post live (finished live)
         is_live = data.get('live') == 2
+        if is_live:
+            title = self._live_title(title)
 
         timestamp = unified_timestamp(self._html_search_regex(
             r'class=["\']mv_info_date[^>]+>([^<]+)(?:<|from)', info_page,
@@ -469,13 +460,6 @@ class VKIE(VKBaseIE):
                 })
         self._sort_formats(formats)
 
-        subtitles = {}
-        for sub in data.get('subs') or {}:
-            subtitles.setdefault(sub.get('lang', 'en'), []).append({
-                'ext': sub.get('title', '.srt').split('.')[-1],
-                'url': url_or_none(sub.get('url')),
-            })
-
         return {
             'id': video_id,
             'formats': formats,
@@ -489,7 +473,6 @@ class VKIE(VKBaseIE):
             'like_count': int_or_none(mv_data.get('likes')),
             'comment_count': int_or_none(mv_data.get('commcount')),
             'is_live': is_live,
-            'subtitles': subtitles,
         }
 
 
@@ -544,7 +527,7 @@ class VKUserVideosIE(VKBaseIE):
                 'http://vk.com/video' + video_id, VKIE.ie_key(), video_id)
 
     def _real_extract(self, url):
-        page_id, section = self._match_valid_url(url).groups()
+        page_id, section = re.match(self._VALID_URL, url).groups()
         if not section:
             section = 'all'
 

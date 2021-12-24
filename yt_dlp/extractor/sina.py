@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -17,7 +18,7 @@ from ..utils import (
 class SinaIE(InfoExtractor):
     _VALID_URL = r'''(?x)https?://(?:.*?\.)?video\.sina\.com\.cn/
                         (?:
-                            (?:view/|.*\#)(?P<id>\d+)|
+                            (?:view/|.*\#)(?P<video_id>\d+)|
                             .+?/(?P<pseudo_id>[^/?#]+)(?:\.s?html)|
                             # This is used by external sites like Weibo
                             api/sinawebApi/outplay.php/(?P<token>.+?)\.swf
@@ -55,9 +56,9 @@ class SinaIE(InfoExtractor):
     ]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
 
-        video_id = mobj.group('id')
+        video_id = mobj.group('video_id')
         if not video_id:
             if mobj.group('token') is not None:
                 # The video id is in the redirected url
@@ -98,7 +99,7 @@ class SinaIE(InfoExtractor):
                 formats.append({
                     'format_id': quality_id,
                     'url': update_url_query(file_api, {'vid': file_id}),
-                    'quality': preference(quality_id),
+                    'preference': preference(quality_id),
                     'ext': 'mp4',
                 })
             self._sort_formats(formats)

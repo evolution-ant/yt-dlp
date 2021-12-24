@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -75,7 +76,7 @@ class GaiaIE(InfoExtractor):
             self._jwt = auth.get('jwt')
 
     def _real_extract(self, url):
-        display_id, vtype = self._match_valid_url(url).groups()
+        display_id, vtype = re.search(self._VALID_URL, url).groups()
         node_id = self._download_json(
             'https://brooklyn.gaia.com/pathinfo', display_id, query={
                 'path': 'video/' + display_id,

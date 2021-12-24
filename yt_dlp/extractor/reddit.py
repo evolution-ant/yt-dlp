@@ -1,37 +1,71 @@
-import random
+from __future__ import unicode_literals
+
+import re
 
 from .common import InfoExtractor
 from ..utils import (
     ExtractorError,
     int_or_none,
     float_or_none,
-    try_get,
-    unescapeHTML,
     url_or_none,
-    traverse_obj
 )
 
 
 class RedditIE(InfoExtractor):
-    _VALID_URL = r'https?://(?P<subdomain>[^/]+\.)?reddit(?:media)?\.com/r/(?P<slug>[^/]+/comments/(?P<id>[^/?#&]+))'
+    _VALID_URL = r'https?://v\.redd\.it/(?P<id>[^/?#&]+)'
+    _TEST = {
+        # from https://www.reddit.com/r/videos/comments/6rrwyj/that_small_heart_attack/
+        'url': 'https://v.redd.it/zv89llsvexdz',
+        'md5': '0a070c53eba7ec4534d95a5a1259e253',
+        'info_dict': {
+            'id': 'zv89llsvexdz',
+            'ext': 'mp4',
+            'title': 'zv89llsvexdz',
+        },
+        'params': {
+            'format': 'bestvideo',
+        },
+    }
+
+    def _real_extract(self, url):
+        video_id = self._match_id(url)
+
+        formats = self._extract_m3u8_formats(
+            'https://v.redd.it/%s/HLSPlaylist.m3u8' % video_id, video_id,
+            'mp4', entry_protocol='m3u8_native', m3u8_id='hls', fatal=False)
+
+        formats.extend(self._extract_mpd_formats(
+            'https://v.redd.it/%s/DASHPlaylist.mpd' % video_id, video_id,
+            mpd_id='dash', fatal=False))
+
+        self._sort_formats(formats)
+
+        return {
+            'id': video_id,
+            'title': video_id,
+            'formats': formats,
+        }
+
+
+class RedditRIE(InfoExtractor):
+    _VALID_URL = r'(?P<url>https?://(?:[^/]+\.)?reddit\.com/r/[^/]+/comments/(?P<id>[^/?#&]+))'
     _TESTS = [{
         'url': 'https://www.reddit.com/r/videos/comments/6rrwyj/that_small_heart_attack/',
         'info_dict': {
             'id': 'zv89llsvexdz',
             'ext': 'mp4',
             'title': 'That small heart attack.',
-            'thumbnail': r're:^https?://.*\.(?:jpg|png)',
-            'thumbnails': 'count:4',
+            'thumbnail': r're:^https?://.*\.jpg$',
             'timestamp': 1501941939,
             'upload_date': '20170805',
             'uploader': 'Antw87',
-            'duration': 12,
             'like_count': int,
             'dislike_count': int,
             'comment_count': int,
             'age_limit': 0,
         },
         'params': {
+            'format': 'bestvideo',
             'skip_download': True,
         },
     }, {
@@ -57,27 +91,17 @@ class RedditIE(InfoExtractor):
         # reddit video @ nm reddit
         'url': 'https://nm.reddit.com/r/Cricket/comments/8idvby/lousy_cameraman_finds_himself_in_cairns_line_of/',
         'only_matching': True,
-    }, {
-        'url': 'https://www.redditmedia.com/r/serbia/comments/pu9wbx/ako_vu%C4%8Di%C4%87_izgubi_izbore_ja_%C4%87u_da_crknem/',
-        'only_matching': True,
     }]
 
-    @staticmethod
-    def _gen_session_id():
-        id_length = 16
-        rand_max = 1 << (id_length * 4)
-        return '%0.*x' % (id_length, random.randrange(rand_max))
-
     def _real_extract(self, url):
-        subdomain, slug, video_id = self._match_valid_url(url).group('subdomain', 'slug', 'id')
+        mobj = re.match(self._VALID_URL, url)
+        url, video_id = mobj.group('url', 'id')
 
-        self._set_cookie('.reddit.com', 'reddit_session', self._gen_session_id())
-        self._set_cookie('.reddit.com', '_options', '%7B%22pref_quarantine_optin%22%3A%20true%7D')
-        data = self._download_json(f'https://{subdomain}reddit.com/r/{slug}/.json', video_id, fatal=False)
-        if not data:
-            # Fall back to old.reddit.com in case the requested subdomain fails
-            data = self._download_json(f'https://old.reddit.com/r/{slug}/.json', video_id)
-        data = data[0]['data']['children'][0]['data']
+        video_id = self._match_id(url)
+
+        data = self._download_json(
+            url + '/.json', video_id)[0]['data']['children'][0]['data']
+
         video_url = data['url']
 
         # Avoid recursing into the same reddit URL
@@ -92,76 +116,15 @@ class RedditIE(InfoExtractor):
         else:
             age_limit = None
 
-        thumbnails = []
-
-        def add_thumbnail(src):
-            if not isinstance(src, dict):
-                return
-            thumbnail_url = url_or_none(src.get('url'))
-            if not thumbnail_url:
-                return
-            thumbnails.append({
-                'url': unescapeHTML(thumbnail_url),
-                'width': int_or_none(src.get('width')),
-                'height': int_or_none(src.get('height')),
-            })
-
-        for image in try_get(data, lambda x: x['preview']['images']) or []:
-            if not isinstance(image, dict):
-                continue
-            add_thumbnail(image.get('source'))
-            resolutions = image.get('resolutions')
-            if isinstance(resolutions, list):
-                for resolution in resolutions:
-                    add_thumbnail(resolution)
-
-        info = {
+        return {
+            '_type': 'url_transparent',
+            'url': video_url,
             'title': data.get('title'),
-            'thumbnails': thumbnails,
+            'thumbnail': url_or_none(data.get('thumbnail')),
             'timestamp': float_or_none(data.get('created_utc')),
             'uploader': data.get('author'),
             'like_count': int_or_none(data.get('ups')),
             'dislike_count': int_or_none(data.get('downs')),
             'comment_count': int_or_none(data.get('num_comments')),
             'age_limit': age_limit,
-        }
-
-        # Check if media is hosted on reddit:
-        reddit_video = traverse_obj(data, (('media', 'secure_media'), 'reddit_video'), get_all=False)
-        if reddit_video:
-            playlist_urls = [
-                try_get(reddit_video, lambda x: unescapeHTML(x[y]))
-                for y in ('dash_url', 'hls_url')
-            ]
-
-            # Update video_id
-            display_id = video_id
-            video_id = self._search_regex(
-                r'https?://v\.redd\.it/(?P<id>[^/?#&]+)', reddit_video['fallback_url'],
-                'video_id', default=display_id)
-
-            dash_playlist_url = playlist_urls[0] or f'https://v.redd.it/{video_id}/DASHPlaylist.mpd'
-            hls_playlist_url = playlist_urls[1] or f'https://v.redd.it/{video_id}/HLSPlaylist.m3u8'
-
-            formats = self._extract_m3u8_formats(
-                hls_playlist_url, display_id, 'mp4',
-                entry_protocol='m3u8_native', m3u8_id='hls', fatal=False)
-            formats.extend(self._extract_mpd_formats(
-                dash_playlist_url, display_id, mpd_id='dash', fatal=False))
-            self._sort_formats(formats)
-
-            return {
-                **info,
-                'id': video_id,
-                'display_id': display_id,
-                'formats': formats,
-                'duration': int_or_none(reddit_video.get('duration')),
-            }
-
-        # Not hosted on reddit, must continue extraction
-        return {
-            **info,
-            'display_id': video_id,
-            '_type': 'url_transparent',
-            'url': video_url,
         }

@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 
 import json
 import hashlib
+import re
 
 from .aws import AWSIE
 from .anvato import AnvatoIE
@@ -54,7 +55,7 @@ class ScrippsNetworksWatchIE(AWSIE):
     _AWS_USER_AGENT = 'aws-sdk-js/2.80.0 callback'
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         site_id, video_id = mobj.group('site', 'id')
 
         aws_identity_id_json = json.dumps({
@@ -145,7 +146,7 @@ class ScrippsNetworksIE(InfoExtractor):
     _TP_TEMPL = 'https://link.theplatform.com/s/ip77QC/media/guid/%d/%s?mbr=true'
 
     def _real_extract(self, url):
-        site, guid = self._match_valid_url(url).groups()
+        site, guid = re.match(self._VALID_URL, url).groups()
         return self.url_result(smuggle_url(
             self._TP_TEMPL % (self._ACCOUNT_MAP[site], guid),
             {'force_smil_url': True}), 'ThePlatform', guid)

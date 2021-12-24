@@ -70,7 +70,7 @@ class VzaarIE(InfoExtractor):
             f = {
                 'url': source_url,
                 'format_id': 'http',
-                'quality': 1,
+                'preference': 1,
             }
             if 'audio' in source_url:
                 f.update({

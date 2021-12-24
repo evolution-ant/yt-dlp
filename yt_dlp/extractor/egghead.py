@@ -12,35 +12,26 @@ from ..utils import (
 )
 
 
-class EggheadBaseIE(InfoExtractor):
-    def _call_api(self, path, video_id, resource, fatal=True):
-        return self._download_json(
-            'https://app.egghead.io/api/v1/' + path,
-            video_id, 'Downloading %s JSON' % resource, fatal=fatal)
-
-
-class EggheadCourseIE(EggheadBaseIE):
+class EggheadCourseIE(InfoExtractor):
     IE_DESC = 'egghead.io course'
     IE_NAME = 'egghead:course'
-    _VALID_URL = r'https://(?:app\.)?egghead\.io/(?:course|playlist)s/(?P<id>[^/?#&]+)'
-    _TESTS = [{
+    _VALID_URL = r'https://egghead\.io/courses/(?P<id>[^/?#&]+)'
+    _TEST = {
         'url': 'https://egghead.io/courses/professor-frisby-introduces-composable-functional-javascript',
         'playlist_count': 29,
         'info_dict': {
-            'id': '432655',
+            'id': '72',
             'title': 'Professor Frisby Introduces Composable Functional JavaScript',
             'description': 're:(?s)^This course teaches the ubiquitous.*You\'ll start composing functionality before you know it.$',
         },
-    }, {
-        'url': 'https://app.egghead.io/playlists/professor-frisby-introduces-composable-functional-javascript',
-        'only_matching': True,
-    }]
+    }
 
     def _real_extract(self, url):
         playlist_id = self._match_id(url)
-        series_path = 'series/' + playlist_id
-        lessons = self._call_api(
-            series_path + '/lessons', playlist_id, 'course lessons')
+
+        lessons = self._download_json(
+            'https://egghead.io/api/v1/series/%s/lessons' % playlist_id,
+            playlist_id, 'Downloading course lessons JSON')
 
         entries = []
         for lesson in lessons:
@@ -53,8 +44,9 @@ class EggheadCourseIE(EggheadBaseIE):
             entries.append(self.url_result(
                 lesson_url, ie=EggheadLessonIE.ie_key(), video_id=lesson_id))
 
-        course = self._call_api(
-            series_path, playlist_id, 'course', False) or {}
+        course = self._download_json(
+            'https://egghead.io/api/v1/series/%s' % playlist_id,
+            playlist_id, 'Downloading course JSON', fatal=False) or {}
 
         playlist_id = course.get('id')
         if playlist_id:
@@ -65,10 +57,10 @@ class EggheadCourseIE(EggheadBaseIE):
             course.get('description'))
 
 
-class EggheadLessonIE(EggheadBaseIE):
+class EggheadLessonIE(InfoExtractor):
     IE_DESC = 'egghead.io lesson'
     IE_NAME = 'egghead:lesson'
-    _VALID_URL = r'https://(?:app\.)?egghead\.io/(?:api/v1/)?lessons/(?P<id>[^/?#&]+)'
+    _VALID_URL = r'https://egghead\.io/(?:api/v1/)?lessons/(?P<id>[^/?#&]+)'
     _TESTS = [{
         'url': 'https://egghead.io/lessons/javascript-linear-data-flow-with-container-style-types-box',
         'info_dict': {
@@ -82,24 +74,22 @@ class EggheadLessonIE(EggheadBaseIE):
             'upload_date': '20161209',
             'duration': 304,
             'view_count': 0,
-            'tags': 'count:2',
+            'tags': ['javascript', 'free'],
         },
         'params': {
             'skip_download': True,
+            'format': 'bestvideo',
         },
     }, {
         'url': 'https://egghead.io/api/v1/lessons/react-add-redux-to-a-react-application',
-        'only_matching': True,
-    }, {
-        'url': 'https://app.egghead.io/lessons/javascript-linear-data-flow-with-container-style-types-box',
         'only_matching': True,
     }]
 
     def _real_extract(self, url):
         display_id = self._match_id(url)
 
-        lesson = self._call_api(
-            'lessons/' + display_id, display_id, 'lesson')
+        lesson = self._download_json(
+            'https://egghead.io/api/v1/lessons/%s' % display_id, display_id)
 
         lesson_id = compat_str(lesson['id'])
         title = lesson['title']
@@ -112,7 +102,8 @@ class EggheadLessonIE(EggheadBaseIE):
             ext = determine_ext(format_url)
             if ext == 'm3u8':
                 formats.extend(self._extract_m3u8_formats(
-                    format_url, lesson_id, 'mp4', m3u8_id='hls', fatal=False))
+                    format_url, lesson_id, 'mp4', entry_protocol='m3u8',
+                    m3u8_id='hls', fatal=False))
             elif ext == 'mpd':
                 formats.extend(self._extract_mpd_formats(
                     format_url, lesson_id, mpd_id='dash', fatal=False))

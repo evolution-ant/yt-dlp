@@ -12,7 +12,6 @@ from ..compat import (
 )
 from ..utils import (
     ExtractorError,
-    float_or_none,
     unified_strdate,
     int_or_none,
     qualities,
@@ -98,14 +97,6 @@ class OdnoklassnikiIE(InfoExtractor):
         },
         'skip': 'Video has not been found',
     }, {
-        'note': 'Only available in mobile webpage',
-        'url': 'https://m.ok.ru/video/2361249957145',
-        'info_dict': {
-            'id': '2361249957145',
-            'title': 'Быковское крещение',
-            'duration': 3038.181,
-        },
-    }, {
         'url': 'http://ok.ru/web-api/video/moviePlayer/20079905452',
         'only_matching': True,
     }, {
@@ -140,24 +131,13 @@ class OdnoklassnikiIE(InfoExtractor):
             return mobj.group('url')
 
     def _real_extract(self, url):
-        try:
-            return self._extract_desktop(url)
-        except ExtractorError as e:
-            try:
-                return self._extract_mobile(url)
-            except ExtractorError:
-                # error message of desktop webpage is in English
-                raise e
-
-    def _extract_desktop(self, url):
         start_time = int_or_none(compat_parse_qs(
             compat_urllib_parse_urlparse(url).query).get('fromTime', [None])[0])
 
         video_id = self._match_id(url)
 
         webpage = self._download_webpage(
-            'http://ok.ru/video/%s' % video_id, video_id,
-            note='Downloading desktop webpage')
+            'http://ok.ru/video/%s' % video_id, video_id)
 
         error = self._search_regex(
             r'[^>]+class="vp_video_stub_txt"[^>]*>([^<]+)<',
@@ -235,7 +215,7 @@ class OdnoklassnikiIE(InfoExtractor):
 
         assert title
         if provider == 'LIVE_TV_APP':
-            info['title'] = title
+            info['title'] = self._live_title(title)
 
         quality = qualities(('4', '0', '1', '2', '3', '5'))
 
@@ -267,7 +247,8 @@ class OdnoklassnikiIE(InfoExtractor):
         m3u8_url = metadata.get('hlsMasterPlaylistUrl')
         if m3u8_url:
             formats.extend(self._extract_m3u8_formats(
-                m3u8_url, video_id, 'mp4', m3u8_id='hls', fatal=False))
+                m3u8_url, video_id, 'mp4', entry_protocol='m3u8',
+                m3u8_id='hls', fatal=False))
         rtmp_url = metadata.get('rtmpUrl')
         if rtmp_url:
             formats.append({
@@ -279,38 +260,9 @@ class OdnoklassnikiIE(InfoExtractor):
         if not formats:
             payment_info = metadata.get('paymentInfo')
             if payment_info:
-                self.raise_no_formats('This video is paid, subscribe to download it', expected=True)
+                raise ExtractorError('This video is paid, subscribe to download it', expected=True)
 
         self._sort_formats(formats)
 
         info['formats'] = formats
         return info
-
-    def _extract_mobile(self, url):
-        video_id = self._match_id(url)
-
-        webpage = self._download_webpage(
-            'http://m.ok.ru/video/%s' % video_id, video_id,
-            note='Downloading mobile webpage')
-
-        error = self._search_regex(
-            r'видео</a>\s*<div\s+class="empty">(.+?)</div>',
-            webpage, 'error', default=None)
-        if error:
-            raise ExtractorError(error, expected=True)
-
-        json_data = self._search_regex(
-            r'data-video="(.+?)"', webpage, 'json data')
-        json_data = self._parse_json(unescapeHTML(json_data), video_id) or {}
-
-        return {
-            'id': video_id,
-            'title': json_data.get('videoName'),
-            'duration': float_or_none(json_data.get('videoDuration'), scale=1000),
-            'thumbnail': json_data.get('videoPosterSrc'),
-            'formats': [{
-                'format_id': 'mobile',
-                'url': json_data.get('videoSrc'),
-                'ext': 'mp4',
-            }]
-        }

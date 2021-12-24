@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 
 import codecs
 import re
-import json
 
 from .common import InfoExtractor
 from ..compat import (
@@ -20,7 +19,6 @@ from ..utils import (
     parse_duration,
     random_birthday,
     urljoin,
-    try_get,
 )
 
 
@@ -40,8 +38,6 @@ class CDAIE(InfoExtractor):
             'average_rating': float,
             'duration': 39,
             'age_limit': 0,
-            'upload_date': '20160221',
-            'timestamp': 1456078244,
         }
     }, {
         'url': 'http://www.cda.pl/video/57413289',
@@ -99,11 +95,8 @@ class CDAIE(InfoExtractor):
         if 'Ten film jest dostępny dla użytkowników premium' in webpage:
             raise ExtractorError('This video is only available for premium users.', expected=True)
 
-        if re.search(r'niedostępn[ey] w(?:&nbsp;|\s+)Twoim kraju\s*<', webpage):
-            self.raise_geo_restricted()
-
         need_confirm_age = False
-        if self._html_search_regex(r'(<form[^>]+action="[^"]*/a/validatebirth[^"]*")',
+        if self._html_search_regex(r'(<form[^>]+action="/a/validatebirth")',
                                    webpage, 'birthday validate form', default=None):
             webpage = self._download_age_confirm_page(
                 url, video_id, note='Confirming age')
@@ -137,8 +130,6 @@ class CDAIE(InfoExtractor):
             'age_limit': 18 if need_confirm_age else 0,
         }
 
-        info = self._search_json_ld(webpage, video_id, default={})
-
         # Source: https://www.cda.pl/js/player.js?t=1606154898
         def decrypt_file(a):
             for p in ('_XDDD', '_CDA', '_ADC', '_CXD', '_QWE', '_Q5', '_IKSDE'):
@@ -147,7 +138,7 @@ class CDAIE(InfoExtractor):
             b = []
             for c in a:
                 f = compat_ord(c)
-                b.append(compat_chr(33 + (f + 14) % 94) if 33 <= f <= 126 else compat_chr(f))
+                b.append(compat_chr(33 + (f + 14) % 94) if 33 <= f and 126 >= f else compat_chr(f))
             a = ''.join(b)
             a = a.replace('.cda.mp4', '')
             for p in ('.2cda.pl', '.3cda.pl'):
@@ -177,34 +168,18 @@ class CDAIE(InfoExtractor):
                     video['file'] = video['file'].replace('adc.mp4', '.mp4')
             elif not video['file'].startswith('http'):
                 video['file'] = decrypt_file(video['file'])
-            video_quality = video.get('quality')
-            qualities = video.get('qualities', {})
-            video_quality = next((k for k, v in qualities.items() if v == video_quality), video_quality)
-            info_dict['formats'].append({
+            f = {
                 'url': video['file'],
-                'format_id': video_quality,
-                'height': int_or_none(video_quality[:-1]),
-            })
-            for quality, cda_quality in qualities.items():
-                if quality == video_quality:
-                    continue
-                data = {'jsonrpc': '2.0', 'method': 'videoGetLink', 'id': 2,
-                        'params': [video_id, cda_quality, video.get('ts'), video.get('hash2'), {}]}
-                data = json.dumps(data).encode('utf-8')
-                video_url = self._download_json(
-                    f'https://www.cda.pl/video/{video_id}', video_id, headers={
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }, data=data, note=f'Fetching {quality} url',
-                    errnote=f'Failed to fetch {quality} url', fatal=False)
-                if try_get(video_url, lambda x: x['result']['status']) == 'ok':
-                    video_url = try_get(video_url, lambda x: x['result']['resp'])
-                    info_dict['formats'].append({
-                        'url': video_url,
-                        'format_id': quality,
-                        'height': int_or_none(quality[:-1])
-                    })
-
+            }
+            m = re.search(
+                r'<a[^>]+data-quality="(?P<format_id>[^"]+)"[^>]+href="[^"]+"[^>]+class="[^"]*quality-btn-active[^"]*">(?P<height>[0-9]+)p',
+                page)
+            if m:
+                f.update({
+                    'format_id': m.group('format_id'),
+                    'height': int(m.group('height')),
+                })
+            info_dict['formats'].append(f)
             if not info_dict['duration']:
                 info_dict['duration'] = parse_duration(video.get('duration'))
 
@@ -219,7 +194,7 @@ class CDAIE(InfoExtractor):
                 handler = self._download_webpage
 
             webpage = handler(
-                urljoin(self._BASE_URL, href), video_id,
+                self._BASE_URL + href, video_id,
                 'Downloading %s version information' % resolution, fatal=False)
             if not webpage:
                 # Manually report warning because empty page is returned when
@@ -230,5 +205,7 @@ class CDAIE(InfoExtractor):
             extract_format(webpage, resolution)
 
         self._sort_formats(formats)
+
+        info = self._search_json_ld(webpage, video_id, default={})
 
         return merge_dicts(info_dict, info)

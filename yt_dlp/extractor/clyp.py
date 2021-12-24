@@ -1,9 +1,12 @@
 from __future__ import unicode_literals
 
 from .common import InfoExtractor
+from ..compat import (
+    compat_parse_qs,
+    compat_urllib_parse_urlparse,
+)
 from ..utils import (
     float_or_none,
-    parse_qs,
     unified_timestamp,
 )
 
@@ -41,7 +44,7 @@ class ClypIE(InfoExtractor):
     def _real_extract(self, url):
         audio_id = self._match_id(url)
 
-        qs = parse_qs(url)
+        qs = compat_parse_qs(compat_urllib_parse_urlparse(url).query)
         token = qs.get('token', [None])[0]
 
         query = {}

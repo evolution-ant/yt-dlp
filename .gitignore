@@ -1,113 +1,62 @@
-# Config
-*.conf
-cookies
-*cookies.txt
-.netrc
-
-# Downloaded
-*.annotations.xml
-*.aria2
-*.description
-*.dump
-*.frag
-*.frag.aria2
-*.frag.urls
-*.info.json
-*.live_chat.json
-*.part*
-*.unknown_video
-*.ytdl
-.cache/
-
-*.3gp
-*.ape
-*.avi
-*.desktop
-*.flac
-*.flv
-*.jpeg
-*.jpg
-*.m4a
-*.m4v
-*.mhtml
-*.mkv
-*.mov
-*.mp3
-*.mp4
-*.ogg
-*.opus
-*.png
-*.sbv
-*.srt
-*.swf
-*.swp
-*.ttml
-*.url
-*.vtt
-*.wav
-*.webloc
-*.webm
-*.webp
-
-# Allow config/media files in testdata
-!test/**
-
-# Python
 *.pyc
 *.pyo
-.pytest_cache
-wine-py2exe/
-py2exe.log
-build/
-dist/
-zip/
-tmp/
-venv/
-completions/
-
-# Misc
+*.class
 *~
 *.DS_Store
+wine-py2exe/
+py2exe.log
 *.kate-swp
+build/
+dist/
 MANIFEST
-test/local_parameters.json
+README.txt
+yt-dlp.1
+yt-dlp.bash-completion
+yt-dlp.fish
+yt_dlp/extractor/lazy_extractors.py
+yt-dlp
+yt-dlp.exe
+yt-dlp.tar.gz
 .coverage
 cover/
-secrets/
 updates_key.pem
 *.egg-info
+*.srt
+*.ttml
+*.sbv
+*.vtt
+*.flv
+*.mp4
+*.m4a
+*.m4v
+*.mp3
+*.3gp
+*.wav
+*.ape
+*.mkv
+*.swf
+*.part
+*.ytdl
+*.swp
+test/local_parameters.json
 .tox
-*.class
+yt-dlp.zsh
 
-# Generated
-AUTHORS
-README.txt
-.mailmap
-*.1
-*.bash-completion
-*.fish
-*.tar.gz
-*.zsh
-*.spec
-test/testdata/player-*.js
-
-# Binary
-/youtube-dl
-/youtube-dlc
-/yt-dlp
-yt-dlp.zip
-*.exe
-
-# Text Editor / IDE
+# IntelliJ related files
 .idea
 *.iml
+
+tmp/
+venv/
+
+# VS Code related files
 .vscode
-*.sublime-*
+yt_dlp/extractor/bilibili - 副本.py
 
-# Lazy extractors
-*/extractor/lazy_extractors.py
+# pyc file
+*.zip
 
-# Plugins
-ytdlp_plugins/extractor/*
-!ytdlp_plugins/extractor/__init__.py
-!ytdlp_plugins/extractor/sample.py
+# local demo
+demo.py
+test.py
+demo.json

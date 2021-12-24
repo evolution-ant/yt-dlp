@@ -289,7 +289,7 @@ class NexxIE(InfoExtractor):
         return formats
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         domain_id = mobj.group('domain_id') or mobj.group('domain_id_s')
         video_id = mobj.group('id')
 
@@ -385,7 +385,8 @@ class NexxIE(InfoExtractor):
         elif cdn == 'free':
             formats = self._extract_free_formats(video, video_id)
         else:
-            self.raise_no_formats(f'{cdn} formats are currently not supported', video_id)
+            # TODO: reverse more cdns
+            assert False
 
         self._sort_formats(formats)
 
@@ -426,6 +427,7 @@ class NexxEmbedIE(InfoExtractor):
             'upload_date': '20140305',
         },
         'params': {
+            'format': 'bestvideo',
             'skip_download': True,
         },
     }, {

@@ -7,7 +7,6 @@ from ..compat import compat_parse_qs
 from ..utils import (
     determine_ext,
     ExtractorError,
-    get_element_by_class,
     int_or_none,
     lowercase_escape,
     try_get,
@@ -39,7 +38,7 @@ class GoogleDriveIE(InfoExtractor):
         }
     }, {
         # video can't be watched anonymously due to view count limit reached,
-        # but can be downloaded (see https://github.com/ytdl-org/youtube-dl/issues/14046)
+        # but can be downloaded (see https://github.com/ytdl-org/yt-dlp/issues/14046)
         'url': 'https://drive.google.com/file/d/0B-vUyvmDLdWDcEt4WjBqcmI2XzQ/view',
         'only_matching': True,
     }, {
@@ -238,7 +237,7 @@ class GoogleDriveIE(InfoExtractor):
                 if confirmation_webpage:
                     confirm = self._search_regex(
                         r'confirm=([^&"\']+)', confirmation_webpage,
-                        'confirmation code', default=None)
+                        'confirmation code', fatal=False)
                     if confirm:
                         confirmed_source_url = update_url_query(source_url, {
                             'confirm': confirm,
@@ -246,14 +245,9 @@ class GoogleDriveIE(InfoExtractor):
                         urlh = request_source_file(confirmed_source_url, 'confirmed source')
                         if urlh and urlh.headers.get('Content-Disposition'):
                             add_source_format(urlh)
-                    else:
-                        self.report_warning(
-                            get_element_by_class('uc-error-subcaption', confirmation_webpage)
-                            or get_element_by_class('uc-error-caption', confirmation_webpage)
-                            or 'unable to extract confirmation code')
 
         if not formats and reason:
-            self.raise_no_formats(reason, expected=True)
+            raise ExtractorError(reason, expected=True)
 
         self._sort_formats(formats)
 
@@ -265,8 +259,6 @@ class GoogleDriveIE(InfoExtractor):
             # query string
             subtitles_id = ttsurl.encode('utf-8').decode(
                 'unicode_escape').split('=')[-1]
-
-        self._downloader.cookiejar.clear(domain='.google.com', path='/', name='NID')
 
         return {
             'id': video_id,

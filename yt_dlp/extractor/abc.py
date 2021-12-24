@@ -8,12 +8,10 @@ import time
 from .common import InfoExtractor
 from ..compat import compat_str
 from ..utils import (
-    dict_get,
     ExtractorError,
     js_to_json,
     int_or_none,
     parse_iso8601,
-    str_or_none,
     try_get,
     unescapeHTML,
     update_url_query,
@@ -22,7 +20,7 @@ from ..utils import (
 
 class ABCIE(InfoExtractor):
     IE_NAME = 'abc.net.au'
-    _VALID_URL = r'https?://(?:www\.)?abc\.net\.au/(?:news|btn)/(?:[^/]+/){1,4}(?P<id>\d{5,})'
+    _VALID_URL = r'https?://(?:www\.)?abc\.net\.au/news/(?:[^/]+/){1,2}(?P<id>\d+)'
 
     _TESTS = [{
         'url': 'http://www.abc.net.au/news/2014-11-05/australia-to-staff-ebola-treatment-centre-in-sierra-leone/5868334',
@@ -36,7 +34,7 @@ class ABCIE(InfoExtractor):
         'skip': 'this video has expired',
     }, {
         'url': 'http://www.abc.net.au/news/2015-08-17/warren-entsch-introduces-same-sex-marriage-bill/6702326',
-        'md5': '4ebd61bdc82d9a8b722f64f1f4b4d121',
+        'md5': 'db2a5369238b51f9811ad815b69dc086',
         'info_dict': {
             'id': 'NvqvPeNZsHU',
             'ext': 'mp4',
@@ -60,102 +58,39 @@ class ABCIE(InfoExtractor):
     }, {
         'url': 'http://www.abc.net.au/news/2015-10-19/6866214',
         'only_matching': True,
-    }, {
-        'url': 'https://www.abc.net.au/btn/classroom/wwi-centenary/10527914',
-        'info_dict': {
-            'id': '10527914',
-            'ext': 'mp4',
-            'title': 'WWI Centenary',
-            'description': 'md5:c2379ec0ca84072e86b446e536954546',
-        }
-    }, {
-        'url': 'https://www.abc.net.au/news/programs/the-world/2020-06-10/black-lives-matter-protests-spawn-support-for/12342074',
-        'info_dict': {
-            'id': '12342074',
-            'ext': 'mp4',
-            'title': 'Black Lives Matter protests spawn support for Papuans in Indonesia',
-            'description': 'md5:2961a17dc53abc558589ccd0fb8edd6f',
-        }
-    }, {
-        'url': 'https://www.abc.net.au/btn/newsbreak/btn-newsbreak-20200814/12560476',
-        'info_dict': {
-            'id': 'tDL8Ld4dK_8',
-            'ext': 'mp4',
-            'title': 'Fortnite Banned From Apple and Google App Stores',
-            'description': 'md5:a6df3f36ce8f816b74af4bd6462f5651',
-            'upload_date': '20200813',
-            'uploader': 'Behind the News',
-            'uploader_id': 'behindthenews',
-        }
     }]
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
         webpage = self._download_webpage(url, video_id)
 
-        mobj = re.search(r'<a\s+href="(?P<url>[^"]+)"\s+data-duration="\d+"\s+title="Download audio directly">', webpage)
-        if mobj:
-            urls_info = mobj.groupdict()
-            youtube = False
-            video = False
-        else:
-            mobj = re.search(r'<a href="(?P<url>http://www\.youtube\.com/watch\?v=[^"]+)"><span><strong>External Link:</strong>',
-                             webpage)
-            if mobj is None:
-                mobj = re.search(r'<iframe width="100%" src="(?P<url>//www\.youtube-nocookie\.com/embed/[^?"]+)', webpage)
-            if mobj:
-                urls_info = mobj.groupdict()
-                youtube = True
-                video = True
-
+        mobj = re.search(
+            r'inline(?P<type>Video|Audio|YouTube)Data\.push\((?P<json_data>[^)]+)\);',
+            webpage)
         if mobj is None:
-            mobj = re.search(r'(?P<type>)"sources": (?P<json_data>\[[^\]]+\]),', webpage)
-            if mobj is None:
-                mobj = re.search(
-                    r'inline(?P<type>Video|Audio|YouTube)Data\.push\((?P<json_data>[^)]+)\);',
-                    webpage)
-                if mobj is None:
-                    expired = self._html_search_regex(r'(?s)class="expired-(?:video|audio)".+?<span>(.+?)</span>', webpage, 'expired', None)
-                    if expired:
-                        raise ExtractorError('%s said: %s' % (self.IE_NAME, expired), expected=True)
-                    raise ExtractorError('Unable to extract video urls')
+            expired = self._html_search_regex(r'(?s)class="expired-(?:video|audio)".+?<span>(.+?)</span>', webpage, 'expired', None)
+            if expired:
+                raise ExtractorError('%s said: %s' % (self.IE_NAME, expired), expected=True)
+            raise ExtractorError('Unable to extract video urls')
 
-            urls_info = self._parse_json(
-                mobj.group('json_data'), video_id, transform_source=js_to_json)
-            youtube = mobj.group('type') == 'YouTube'
-            video = mobj.group('type') == 'Video' or urls_info[0]['contentType'] == 'video/mp4'
+        urls_info = self._parse_json(
+            mobj.group('json_data'), video_id, transform_source=js_to_json)
 
         if not isinstance(urls_info, list):
             urls_info = [urls_info]
 
-        if youtube:
+        if mobj.group('type') == 'YouTube':
             return self.playlist_result([
                 self.url_result(url_info['url']) for url_info in urls_info])
 
-        formats = []
-        for url_info in urls_info:
-            height = int_or_none(url_info.get('height'))
-            bitrate = int_or_none(url_info.get('bitrate'))
-            width = int_or_none(url_info.get('width'))
-            format_id = None
-            mobj = re.search(r'_(?:(?P<height>\d+)|(?P<bitrate>\d+)k)\.mp4$', url_info['url'])
-            if mobj:
-                height_from_url = mobj.group('height')
-                if height_from_url:
-                    height = height or int_or_none(height_from_url)
-                    width = width or int_or_none(url_info.get('label'))
-                else:
-                    bitrate = bitrate or int_or_none(mobj.group('bitrate'))
-                    format_id = str_or_none(url_info.get('label'))
-            formats.append({
-                'url': url_info['url'],
-                'vcodec': url_info.get('codec') if video else 'none',
-                'width': width,
-                'height': height,
-                'tbr': bitrate,
-                'filesize': int_or_none(url_info.get('filesize')),
-                'format_id': format_id
-            })
+        formats = [{
+            'url': url_info['url'],
+            'vcodec': url_info.get('codec') if mobj.group('type') == 'Video' else 'none',
+            'width': int_or_none(url_info.get('width')),
+            'height': int_or_none(url_info.get('height')),
+            'tbr': int_or_none(url_info.get('bitrate')),
+            'filesize': int_or_none(url_info.get('filesize')),
+        } for url_info in urls_info]
 
         self._sort_formats(formats)
 
@@ -234,6 +169,8 @@ class ABCIViewIE(InfoExtractor):
             }]
 
         is_live = video_params.get('livestream') == '1'
+        if is_live:
+            title = self._live_title(title)
 
         return {
             'id': video_id,
@@ -253,67 +190,4 @@ class ABCIViewIE(InfoExtractor):
             'formats': formats,
             'subtitles': subtitles,
             'is_live': is_live,
-        }
-
-
-class ABCIViewShowSeriesIE(InfoExtractor):
-    IE_NAME = 'abc.net.au:iview:showseries'
-    _VALID_URL = r'https?://iview\.abc\.net\.au/show/(?P<id>[^/]+)(?:/series/\d+)?$'
-    _GEO_COUNTRIES = ['AU']
-
-    _TESTS = [{
-        'url': 'https://iview.abc.net.au/show/upper-middle-bogan',
-        'info_dict': {
-            'id': '124870-1',
-            'title': 'Series 1',
-            'description': 'md5:93119346c24a7c322d446d8eece430ff',
-            'series': 'Upper Middle Bogan',
-            'season': 'Series 1',
-            'thumbnail': r're:^https?://cdn\.iview\.abc\.net\.au/thumbs/.*\.jpg$'
-        },
-        'playlist_count': 8,
-    }, {
-        'url': 'https://iview.abc.net.au/show/upper-middle-bogan',
-        'info_dict': {
-            'id': 'CO1108V001S00',
-            'ext': 'mp4',
-            'title': 'Series 1 Ep 1 I\'m A Swan',
-            'description': 'md5:7b676758c1de11a30b79b4d301e8da93',
-            'series': 'Upper Middle Bogan',
-            'uploader_id': 'abc1',
-            'upload_date': '20210630',
-            'timestamp': 1625036400,
-        },
-        'params': {
-            'noplaylist': True,
-            'skip_download': 'm3u8',
-        },
-    }]
-
-    def _real_extract(self, url):
-        show_id = self._match_id(url)
-        webpage = self._download_webpage(url, show_id)
-        webpage_data = self._search_regex(
-            r'window\.__INITIAL_STATE__\s*=\s*[\'"](.+?)[\'"]\s*;',
-            webpage, 'initial state')
-        video_data = self._parse_json(
-            unescapeHTML(webpage_data).encode('utf-8').decode('unicode_escape'), show_id)
-        video_data = video_data['route']['pageData']['_embedded']
-
-        if self.get_param('noplaylist') and 'highlightVideo' in video_data:
-            self.to_screen('Downloading just the highlight video because of --no-playlist')
-            return self.url_result(video_data['highlightVideo']['shareUrl'], ie=ABCIViewIE.ie_key())
-
-        self.to_screen(f'Downloading playlist {show_id} - add --no-playlist to just download the highlight video')
-        series = video_data['selectedSeries']
-        return {
-            '_type': 'playlist',
-            'entries': [self.url_result(episode['shareUrl'])
-                        for episode in series['_embedded']['videoEpisodes']],
-            'id': series.get('id'),
-            'title': dict_get(series, ('title', 'displaySubtitle')),
-            'description': series.get('description'),
-            'series': dict_get(series, ('showTitle', 'displayTitle')),
-            'season': dict_get(series, ('title', 'displaySubtitle')),
-            'thumbnail': series.get('thumbnail'),
         }

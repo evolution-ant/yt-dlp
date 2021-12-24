@@ -7,8 +7,9 @@ from .common import InfoExtractor
 from ..utils import (
     int_or_none,
     unified_strdate,
+    compat_str,
     determine_ext,
-    join_nonempty,
+    ExtractorError,
     update_url_query,
 )
 
@@ -77,7 +78,7 @@ class DisneyIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        domain, video_id, display_id = self._match_valid_url(url).groups()
+        domain, video_id, display_id = re.match(self._VALID_URL, url).groups()
         if not video_id:
             webpage = self._download_webpage(url, display_id)
             grill = re.sub(r'"\s*\+\s*"', '', self._search_regex(
@@ -119,13 +120,18 @@ class DisneyIE(InfoExtractor):
                         continue
                     formats.append(f)
                 continue
+            format_id = []
+            if flavor_format:
+                format_id.append(flavor_format)
+            if tbr:
+                format_id.append(compat_str(tbr))
             ext = determine_ext(flavor_url)
             if flavor_format == 'applehttp' or ext == 'm3u8':
                 ext = 'mp4'
             width = int_or_none(flavor.get('width'))
             height = int_or_none(flavor.get('height'))
             formats.append({
-                'format_id': join_nonempty(flavor_format, tbr),
+                'format_id': '-'.join(format_id),
                 'url': flavor_url,
                 'width': width,
                 'height': height,
@@ -134,7 +140,7 @@ class DisneyIE(InfoExtractor):
                 'vcodec': 'none' if (width == 0 and height == 0) else None,
             })
         if not formats and video_data.get('expired'):
-            self.raise_no_formats(
+            raise ExtractorError(
                 '%s said: %s' % (self.IE_NAME, page_data['translations']['video_expired']),
                 expected=True)
         self._sort_formats(formats)

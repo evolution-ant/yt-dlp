@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -7,6 +8,7 @@ from ..compat import (
 )
 from ..utils import (
     int_or_none,
+    ExtractorError,
 )
 
 
@@ -97,7 +99,7 @@ class VubeIE(InfoExtractor):
     ]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         video_id = mobj.group('id')
 
         video = self._download_json(
@@ -123,12 +125,12 @@ class VubeIE(InfoExtractor):
                 })
             formats.append(fmt)
 
+        self._sort_formats(formats)
+
         if not formats and video.get('vst') == 'dmca':
-            self.raise_no_formats(
+            raise ExtractorError(
                 'This video has been removed in response to a complaint received under the US Digital Millennium Copyright Act.',
                 expected=True)
-
-        self._sort_formats(formats)
 
         title = video['title']
         description = video.get('description')

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import unicode_literals
 
 import optparse
@@ -10,11 +10,10 @@ sys.path.insert(0, dirn(dirn((os.path.abspath(__file__)))))
 import yt_dlp
 from yt_dlp.utils import shell_quote
 
-FISH_COMPLETION_FILE = 'completions/fish/yt-dlp.fish'
+FISH_COMPLETION_FILE = 'yt-dlp.fish'
 FISH_COMPLETION_TEMPLATE = 'devscripts/fish-completion.in'
 
 EXTRA_ARGS = {
-    'remux-video': ['--arguments', 'mp4 mkv', '--exclusive'],
     'recode-video': ['--arguments', 'mp4 flv ogg webm mkv', '--exclusive'],
 
     # Options that need a file parameter

@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from .nexx import NexxIE
@@ -30,7 +31,7 @@ class FunkIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        display_id, nexx_id = self._match_valid_url(url).groups()
+        display_id, nexx_id = re.match(self._VALID_URL, url).groups()
         video = self._download_json(
             'https://www.funk.net/api/v4.0/videos/' + nexx_id, nexx_id)
         return {

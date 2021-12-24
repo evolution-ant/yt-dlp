@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import unicode_literals
 
 # Allow direct execution
@@ -7,7 +7,7 @@ import sys
 import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test.helper import FakeYDL, md5, is_download_test
+from test.helper import FakeYDL, md5
 
 
 from yt_dlp.extractor import (
@@ -19,7 +19,6 @@ from yt_dlp.extractor import (
     CeskaTelevizeIE,
     LyndaIE,
     NPOIE,
-    PBSIE,
     ComedyCentralIE,
     NRKTVIE,
     RaiPlayIE,
@@ -31,7 +30,6 @@ from yt_dlp.extractor import (
 )
 
 
-@is_download_test
 class BaseTestSubtitles(unittest.TestCase):
     url = None
     IE = None
@@ -57,7 +55,6 @@ class BaseTestSubtitles(unittest.TestCase):
         return dict((l, sub_info['data']) for l, sub_info in subtitles.items())
 
 
-@is_download_test
 class TestYoutubeSubtitles(BaseTestSubtitles):
     url = 'QRS8MkLhQmM'
     IE = YoutubeIE
@@ -67,8 +64,8 @@ class TestYoutubeSubtitles(BaseTestSubtitles):
         self.DL.params['allsubtitles'] = True
         subtitles = self.getSubtitles()
         self.assertEqual(len(subtitles.keys()), 13)
-        self.assertEqual(md5(subtitles['en']), '688dd1ce0981683867e7fe6fde2a224b')
-        self.assertEqual(md5(subtitles['it']), '31324d30b8430b309f7f5979a504a769')
+        self.assertEqual(md5(subtitles['en']), '3cb210999d3e021bd6c7f0ea751eab06')
+        self.assertEqual(md5(subtitles['it']), '6d752b98c31f1cf8d597050c7a2cb4b5')
         for lang in ['fr', 'de']:
             self.assertTrue(subtitles.get(lang) is not None, 'Subtitles for \'%s\' not extracted' % lang)
 
@@ -76,13 +73,13 @@ class TestYoutubeSubtitles(BaseTestSubtitles):
         self.DL.params['writesubtitles'] = True
         self.DL.params['subtitlesformat'] = 'ttml'
         subtitles = self.getSubtitles()
-        self.assertEqual(md5(subtitles['en']), 'c97ddf1217390906fa9fbd34901f3da2')
+        self.assertEqual(md5(subtitles['en']), 'e306f8c42842f723447d9f63ad65df54')
 
     def test_youtube_subtitles_vtt_format(self):
         self.DL.params['writesubtitles'] = True
         self.DL.params['subtitlesformat'] = 'vtt'
         subtitles = self.getSubtitles()
-        self.assertEqual(md5(subtitles['en']), 'ae1bd34126571a77aabd4d276b28044d')
+        self.assertEqual(md5(subtitles['en']), '3cb210999d3e021bd6c7f0ea751eab06')
 
     def test_youtube_automatic_captions(self):
         self.url = '8YoUxe5ncPo'
@@ -91,15 +88,9 @@ class TestYoutubeSubtitles(BaseTestSubtitles):
         subtitles = self.getSubtitles()
         self.assertTrue(subtitles['it'] is not None)
 
-    def test_youtube_no_automatic_captions(self):
-        self.url = 'QRS8MkLhQmM'
-        self.DL.params['writeautomaticsub'] = True
-        subtitles = self.getSubtitles()
-        self.assertTrue(not subtitles)
-
     def test_youtube_translated_subtitles(self):
         # This video has a subtitles track, which can be translated
-        self.url = 'i0ZabxXmH4Y'
+        self.url = 'Ky9eprVWzlI'
         self.DL.params['writeautomaticsub'] = True
         self.DL.params['subtitleslangs'] = ['it']
         subtitles = self.getSubtitles()
@@ -114,7 +105,6 @@ class TestYoutubeSubtitles(BaseTestSubtitles):
         self.assertFalse(subtitles)
 
 
-@is_download_test
 class TestDailymotionSubtitles(BaseTestSubtitles):
     url = 'http://www.dailymotion.com/video/xczg00'
     IE = DailymotionIE
@@ -138,7 +128,6 @@ class TestDailymotionSubtitles(BaseTestSubtitles):
         self.assertFalse(subtitles)
 
 
-@is_download_test
 class TestTedSubtitles(BaseTestSubtitles):
     url = 'http://www.ted.com/talks/dan_dennett_on_our_consciousness.html'
     IE = TEDIE
@@ -154,7 +143,6 @@ class TestTedSubtitles(BaseTestSubtitles):
             self.assertTrue(subtitles.get(lang) is not None, 'Subtitles for \'%s\' not extracted' % lang)
 
 
-@is_download_test
 class TestVimeoSubtitles(BaseTestSubtitles):
     url = 'http://vimeo.com/76979871'
     IE = VimeoIE
@@ -176,7 +164,6 @@ class TestVimeoSubtitles(BaseTestSubtitles):
         self.assertFalse(subtitles)
 
 
-@is_download_test
 class TestWallaSubtitles(BaseTestSubtitles):
     url = 'http://vod.walla.co.il/movie/2705958/the-yes-men'
     IE = WallaIE
@@ -198,7 +185,6 @@ class TestWallaSubtitles(BaseTestSubtitles):
         self.assertFalse(subtitles)
 
 
-@is_download_test
 class TestCeskaTelevizeSubtitles(BaseTestSubtitles):
     url = 'http://www.ceskatelevize.cz/ivysilani/10600540290-u6-uzasny-svet-techniky'
     IE = CeskaTelevizeIE
@@ -220,7 +206,6 @@ class TestCeskaTelevizeSubtitles(BaseTestSubtitles):
         self.assertFalse(subtitles)
 
 
-@is_download_test
 class TestLyndaSubtitles(BaseTestSubtitles):
     url = 'http://www.lynda.com/Bootstrap-tutorials/Using-exercise-files/110885/114408-4.html'
     IE = LyndaIE
@@ -233,7 +218,6 @@ class TestLyndaSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['en']), '09bbe67222259bed60deaa26997d73a7')
 
 
-@is_download_test
 class TestNPOSubtitles(BaseTestSubtitles):
     url = 'http://www.npo.nl/nos-journaal/28-08-2014/POW_00722860'
     IE = NPOIE
@@ -246,7 +230,6 @@ class TestNPOSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['nl']), 'fc6435027572b63fb4ab143abd5ad3f4')
 
 
-@is_download_test
 class TestMTVSubtitles(BaseTestSubtitles):
     url = 'http://www.cc.com/video-clips/p63lk0/adam-devine-s-house-party-chasing-white-swans'
     IE = ComedyCentralIE
@@ -262,7 +245,6 @@ class TestMTVSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['en']), '78206b8d8a0cfa9da64dc026eea48961')
 
 
-@is_download_test
 class TestNRKSubtitles(BaseTestSubtitles):
     url = 'http://tv.nrk.no/serie/ikke-gjoer-dette-hjemme/DMPV73000411/sesong-2/episode-1'
     IE = NRKTVIE
@@ -275,28 +257,18 @@ class TestNRKSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['no']), '544fa917d3197fcbee64634559221cc2')
 
 
-@is_download_test
 class TestRaiPlaySubtitles(BaseTestSubtitles):
+    url = 'http://www.raiplay.it/video/2014/04/Report-del-07042014-cb27157f-9dd0-4aee-b788-b1f67643a391.html'
     IE = RaiPlayIE
 
-    def test_subtitles_key(self):
-        self.url = 'http://www.raiplay.it/video/2014/04/Report-del-07042014-cb27157f-9dd0-4aee-b788-b1f67643a391.html'
+    def test_allsubtitles(self):
         self.DL.params['writesubtitles'] = True
         self.DL.params['allsubtitles'] = True
         subtitles = self.getSubtitles()
         self.assertEqual(set(subtitles.keys()), set(['it']))
         self.assertEqual(md5(subtitles['it']), 'b1d90a98755126b61e667567a1f6680a')
 
-    def test_subtitles_array_key(self):
-        self.url = 'https://www.raiplay.it/video/2020/12/Report---04-01-2021-2e90f1de-8eee-4de4-ac0e-78d21db5b600.html'
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['allsubtitles'] = True
-        subtitles = self.getSubtitles()
-        self.assertEqual(set(subtitles.keys()), set(['it']))
-        self.assertEqual(md5(subtitles['it']), '4b3264186fbb103508abe5311cfcb9cd')
 
-
-@is_download_test
 class TestVikiSubtitles(BaseTestSubtitles):
     url = 'http://www.viki.com/videos/1060846v-punch-episode-18'
     IE = VikiIE
@@ -309,7 +281,6 @@ class TestVikiSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['en']), '53cb083a5914b2d84ef1ab67b880d18a')
 
 
-@is_download_test
 class TestThePlatformSubtitles(BaseTestSubtitles):
     # from http://www.3playmedia.com/services-features/tools/integrations/theplatform/
     # (see http://theplatform.com/about/partners/type/subtitles-closed-captioning/)
@@ -324,7 +295,6 @@ class TestThePlatformSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['en']), '97e7670cbae3c4d26ae8bcc7fdd78d4b')
 
 
-@is_download_test
 class TestThePlatformFeedSubtitles(BaseTestSubtitles):
     url = 'http://feed.theplatform.com/f/7wvmTC/msnbc_video-p-test?form=json&pretty=true&range=-40&byGuid=n_hardball_5biden_140207'
     IE = ThePlatformFeedIE
@@ -337,7 +307,6 @@ class TestThePlatformFeedSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['en']), '48649a22e82b2da21c9a67a395eedade')
 
 
-@is_download_test
 class TestRtveSubtitles(BaseTestSubtitles):
     url = 'http://www.rtve.es/alacarta/videos/los-misterios-de-laura/misterios-laura-capitulo-32-misterio-del-numero-17-2-parte/2428621/'
     IE = RTVEALaCartaIE
@@ -352,7 +321,6 @@ class TestRtveSubtitles(BaseTestSubtitles):
         self.assertEqual(md5(subtitles['es']), '69e70cae2d40574fb7316f31d6eb7fca')
 
 
-@is_download_test
 class TestDemocracynowSubtitles(BaseTestSubtitles):
     url = 'http://www.democracynow.org/shows/2015/7/3'
     IE = DemocracynowIE
@@ -371,43 +339,6 @@ class TestDemocracynowSubtitles(BaseTestSubtitles):
         subtitles = self.getSubtitles()
         self.assertEqual(set(subtitles.keys()), set(['en']))
         self.assertEqual(md5(subtitles['en']), 'acaca989e24a9e45a6719c9b3d60815c')
-
-
-@is_download_test
-class TestPBSSubtitles(BaseTestSubtitles):
-    url = 'https://www.pbs.org/video/how-fantasy-reflects-our-world-picecq/'
-    IE = PBSIE
-
-    def test_allsubtitles(self):
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['allsubtitles'] = True
-        subtitles = self.getSubtitles()
-        self.assertEqual(set(subtitles.keys()), set(['en']))
-
-    def test_subtitles_dfxp_format(self):
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['subtitlesformat'] = 'dfxp'
-        subtitles = self.getSubtitles()
-        self.assertIn(md5(subtitles['en']), ['643b034254cdc3768ff1e750b6b5873b'])
-
-    def test_subtitles_vtt_format(self):
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['subtitlesformat'] = 'vtt'
-        subtitles = self.getSubtitles()
-        self.assertIn(
-            md5(subtitles['en']), ['937a05711555b165d4c55a9667017045', 'f49ea998d6824d94959c8152a368ff73'])
-
-    def test_subtitles_srt_format(self):
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['subtitlesformat'] = 'srt'
-        subtitles = self.getSubtitles()
-        self.assertIn(md5(subtitles['en']), ['2082c21b43759d9bf172931b2f2ca371'])
-
-    def test_subtitles_sami_format(self):
-        self.DL.params['writesubtitles'] = True
-        self.DL.params['subtitlesformat'] = 'sami'
-        subtitles = self.getSubtitles()
-        self.assertIn(md5(subtitles['en']), ['4256b16ac7da6a6780fafd04294e85cd'])
 
 
 if __name__ == '__main__':

@@ -110,6 +110,7 @@ class UOLIE(InfoExtractor):
                 'format_id': format_id,
                 'url': f_url,
                 'quality': quality(format_id),
+                'preference': -1,
             })
         self._sort_formats(formats)
 

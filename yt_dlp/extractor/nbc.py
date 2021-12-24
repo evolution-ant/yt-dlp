@@ -10,9 +10,7 @@ from .adobepass import AdobePassIE
 from ..compat import compat_urllib_parse_unquote
 from ..utils import (
     int_or_none,
-    parse_age_limit,
     parse_duration,
-    RegexNotFoundError,
     smuggle_url,
     try_get,
     unified_timestamp,
@@ -20,7 +18,7 @@ from ..utils import (
 )
 
 
-class NBCIE(ThePlatformIE):
+class NBCIE(AdobePassIE):
     _VALID_URL = r'https?(?P<permalink>://(?:www\.)?nbc\.com/(?:classic-tv/)?[^/]+/video/[^/]+/(?P<id>n?\d+))'
 
     _TESTS = [
@@ -86,7 +84,7 @@ class NBCIE(ThePlatformIE):
     ]
 
     def _real_extract(self, url):
-        permalink, video_id = self._match_valid_url(url).groups()
+        permalink, video_id = re.match(self._VALID_URL, url).groups()
         permalink = 'http' + compat_urllib_parse_unquote(permalink)
         video_data = self._download_json(
             'https://friendship.nbc.co/v2/graphql', video_id, query={
@@ -134,9 +132,7 @@ class NBCIE(ThePlatformIE):
             'manifest': 'm3u',
         }
         video_id = video_data['mpxGuid']
-        tp_path = 'NnzsPC/media/guid/%s/%s' % (video_data.get('mpxAccountId') or '2410887629', video_id)
-        tpm = self._download_theplatform_metadata(tp_path, video_id)
-        title = tpm.get('title') or video_data.get('secondaryTitle')
+        title = video_data['secondaryTitle']
         if video_data.get('locked'):
             resource = self._get_mvpd_resource(
                 video_data.get('resourceId') or 'nbcentertainment',
@@ -146,46 +142,23 @@ class NBCIE(ThePlatformIE):
         theplatform_url = smuggle_url(update_url_query(
             'http://link.theplatform.com/s/NnzsPC/media/guid/%s/%s' % (video_data.get('mpxAccountId') or '2410887629', video_id),
             query), {'force_smil_url': True})
-
-        # Empty string or 0 can be valid values for these. So the check must be `is None`
-        description = video_data.get('description')
-        if description is None:
-            description = tpm.get('description')
-        episode_number = int_or_none(video_data.get('episodeNumber'))
-        if episode_number is None:
-            episode_number = int_or_none(tpm.get('nbcu$airOrder'))
-        rating = video_data.get('rating')
-        if rating is None:
-            try_get(tpm, lambda x: x['ratings'][0]['rating'])
-        season_number = int_or_none(video_data.get('seasonNumber'))
-        if season_number is None:
-            season_number = int_or_none(tpm.get('nbcu$seasonNumber'))
-        series = video_data.get('seriesShortTitle')
-        if series is None:
-            series = tpm.get('nbcu$seriesShortTitle')
-        tags = video_data.get('keywords')
-        if tags is None or len(tags) == 0:
-            tags = tpm.get('keywords')
-
         return {
             '_type': 'url_transparent',
-            'age_limit': parse_age_limit(rating),
-            'description': description,
-            'episode': title,
-            'episode_number': episode_number,
             'id': video_id,
-            'ie_key': 'ThePlatform',
-            'season_number': season_number,
-            'series': series,
-            'tags': tags,
             'title': title,
             'url': theplatform_url,
+            'description': video_data.get('description'),
+            'tags': video_data.get('keywords'),
+            'season_number': int_or_none(video_data.get('seasonNumber')),
+            'episode_number': int_or_none(video_data.get('episodeNumber')),
+            'episode': title,
+            'series': video_data.get('seriesShortTitle'),
+            'ie_key': 'ThePlatform',
         }
 
 
 class NBCSportsVPlayerIE(InfoExtractor):
-    _VALID_URL_BASE = r'https?://(?:vplayer\.nbcsports\.com|(?:www\.)?nbcsports\.com/vplayer)/'
-    _VALID_URL = _VALID_URL_BASE + r'(?:[^/]+/)+(?P<id>[0-9a-zA-Z_]+)'
+    _VALID_URL = r'https?://vplayer\.nbcsports\.com/(?:[^/]+/)+(?P<id>[0-9a-zA-Z_]+)'
 
     _TESTS = [{
         'url': 'https://vplayer.nbcsports.com/p/BxmELC/nbcsports_embed/select/9CsDKds0kvHI',
@@ -201,15 +174,12 @@ class NBCSportsVPlayerIE(InfoExtractor):
     }, {
         'url': 'https://vplayer.nbcsports.com/p/BxmELC/nbcsports_embed/select/media/_hqLjQ95yx8Z',
         'only_matching': True,
-    }, {
-        'url': 'https://www.nbcsports.com/vplayer/p/BxmELC/nbcsports/select/PHJSaFWbrTY9?form=html&autoPlay=true',
-        'only_matching': True,
     }]
 
     @staticmethod
     def _extract_url(webpage):
         iframe_m = re.search(
-            r'<(?:iframe[^>]+|div[^>]+data-(?:mpx-)?)src="(?P<url>%s[^"]+)"' % NBCSportsVPlayerIE._VALID_URL_BASE, webpage)
+            r'<iframe[^>]+src="(?P<url>https?://vplayer\.nbcsports\.com/[^"]+)"', webpage)
         if iframe_m:
             return iframe_m.group('url')
 
@@ -222,29 +192,21 @@ class NBCSportsVPlayerIE(InfoExtractor):
 
 
 class NBCSportsIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?nbcsports\.com//?(?!vplayer/)(?:[^/]+/)+(?P<id>[0-9a-z-]+)'
+    # Does not include https because its certificate is invalid
+    _VALID_URL = r'https?://(?:www\.)?nbcsports\.com//?(?:[^/]+/)+(?P<id>[0-9a-z-]+)'
 
-    _TESTS = [{
-        # iframe src
+    _TEST = {
         'url': 'http://www.nbcsports.com//college-basketball/ncaab/tom-izzo-michigan-st-has-so-much-respect-duke',
         'info_dict': {
             'id': 'PHJSaFWbrTY9',
-            'ext': 'mp4',
+            'ext': 'flv',
             'title': 'Tom Izzo, Michigan St. has \'so much respect\' for Duke',
             'description': 'md5:ecb459c9d59e0766ac9c7d5d0eda8113',
             'uploader': 'NBCU-SPORTS',
             'upload_date': '20150330',
             'timestamp': 1427726529,
         }
-    }, {
-        # data-mpx-src
-        'url': 'https://www.nbcsports.com/philadelphia/philadelphia-phillies/bruce-bochy-hector-neris-hes-idiot',
-        'only_matching': True,
-    }, {
-        # data-src
-        'url': 'https://www.nbcsports.com/boston/video/report-card-pats-secondary-no-match-josh-allen',
-        'only_matching': True,
-    }]
+    }
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
@@ -305,10 +267,37 @@ class NBCSportsStreamIE(AdobePassIE):
         self._sort_formats(formats)
         return {
             'id': video_id,
-            'title': title,
+            'title': self._live_title(title) if is_live else title,
             'description': live_source.get('description'),
             'formats': formats,
             'is_live': is_live,
+        }
+
+
+class CSNNEIE(InfoExtractor):
+    _VALID_URL = r'https?://(?:www\.)?csnne\.com/video/(?P<id>[0-9a-z-]+)'
+
+    _TEST = {
+        'url': 'http://www.csnne.com/video/snc-evening-update-wright-named-red-sox-no-5-starter',
+        'info_dict': {
+            'id': 'yvBLLUgQ8WU0',
+            'ext': 'mp4',
+            'title': 'SNC evening update: Wright named Red Sox\' No. 5 starter.',
+            'description': 'md5:1753cfee40d9352b19b4c9b3e589b9e3',
+            'timestamp': 1459369979,
+            'upload_date': '20160330',
+            'uploader': 'NBCU-SPORTS',
+        }
+    }
+
+    def _real_extract(self, url):
+        display_id = self._match_id(url)
+        webpage = self._download_webpage(url, display_id)
+        return {
+            '_type': 'url_transparent',
+            'ie_key': 'ThePlatform',
+            'url': self._html_search_meta('twitter:player:stream', webpage),
+            'display_id': display_id,
         }
 
 
@@ -461,7 +450,7 @@ class NBCNewsIE(ThePlatformIE):
 
 class NBCOlympicsIE(InfoExtractor):
     IE_NAME = 'nbcolympics'
-    _VALID_URL = r'https?://www\.nbcolympics\.com/videos?/(?P<id>[0-9a-z-]+)'
+    _VALID_URL = r'https?://www\.nbcolympics\.com/video/(?P<id>[a-z-]+)'
 
     _TEST = {
         # Geo-restricted to US
@@ -484,18 +473,13 @@ class NBCOlympicsIE(InfoExtractor):
 
         webpage = self._download_webpage(url, display_id)
 
-        try:
-            drupal_settings = self._parse_json(self._search_regex(
-                r'jQuery\.extend\(Drupal\.settings\s*,\s*({.+?})\);',
-                webpage, 'drupal settings'), display_id)
+        drupal_settings = self._parse_json(self._search_regex(
+            r'jQuery\.extend\(Drupal\.settings\s*,\s*({.+?})\);',
+            webpage, 'drupal settings'), display_id)
 
-            iframe_url = drupal_settings['vod']['iframe_url']
-            theplatform_url = iframe_url.replace(
-                'vplayer.nbcolympics.com', 'player.theplatform.com')
-        except RegexNotFoundError:
-            theplatform_url = self._search_regex(
-                r"([\"'])embedUrl\1: *([\"'])(?P<embedUrl>.+)\2",
-                webpage, 'embedding URL', group="embedUrl")
+        iframe_url = drupal_settings['vod']['iframe_url']
+        theplatform_url = iframe_url.replace(
+            'vplayer.nbcolympics.com', 'player.theplatform.com')
 
         return {
             '_type': 'url_transparent',
@@ -508,77 +492,43 @@ class NBCOlympicsIE(InfoExtractor):
 class NBCOlympicsStreamIE(AdobePassIE):
     IE_NAME = 'nbcolympics:stream'
     _VALID_URL = r'https?://stream\.nbcolympics\.com/(?P<id>[0-9a-z-]+)'
-    _TESTS = [
-        {
-            'note': 'Tokenized m3u8 source URL',
-            'url': 'https://stream.nbcolympics.com/womens-soccer-group-round-11',
-            'info_dict': {
-                'id': '2019740',
-                'ext': 'mp4',
-                'title': r"re:Women's Group Stage - Netherlands vs\. Brazil [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$",
-            },
-            'params': {
-                'skip_download': 'm3u8',
-            },
-        }, {
-            'note': 'Plain m3u8 source URL',
-            'url': 'https://stream.nbcolympics.com/gymnastics-event-finals-mens-floor-pommel-horse-womens-vault-bars',
-            'info_dict': {
-                'id': '2021729',
-                'ext': 'mp4',
-                'title': r're:Event Finals: M Floor, W Vault, M Pommel, W Uneven Bars [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$',
-            },
-            'params': {
-                'skip_download': 'm3u8',
-            },
+    _TEST = {
+        'url': 'http://stream.nbcolympics.com/2018-winter-olympics-nbcsn-evening-feb-8',
+        'info_dict': {
+            'id': '203493',
+            'ext': 'mp4',
+            'title': 're:Curling, Alpine, Luge [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$',
         },
-    ]
+        'params': {
+            # m3u8 download
+            'skip_download': True,
+        },
+    }
+    _DATA_URL_TEMPLATE = 'http://stream.nbcolympics.com/data/%s_%s.json'
 
     def _real_extract(self, url):
         display_id = self._match_id(url)
         webpage = self._download_webpage(url, display_id)
         pid = self._search_regex(r'pid\s*=\s*(\d+);', webpage, 'pid')
-
+        resource = self._search_regex(
+            r"resource\s*=\s*'(.+)';", webpage,
+            'resource').replace("' + pid + '", pid)
         event_config = self._download_json(
-            f'http://stream.nbcolympics.com/data/event_config_{pid}.json',
-            pid, 'Downloading event config')['eventConfig']
-
-        title = event_config['eventTitle']
-        is_live = {'live': True, 'replay': False}.get(event_config.get('eventStatus'))
-
+            self._DATA_URL_TEMPLATE % ('event_config', pid),
+            pid)['eventConfig']
+        title = self._live_title(event_config['eventTitle'])
         source_url = self._download_json(
-            f'https://api-leap.nbcsports.com/feeds/assets/{pid}?application=NBCOlympics&platform=desktop&format=nbc-player&env=staging',
-            pid, 'Downloading leap config'
-        )['videoSources'][0]['cdnSources']['primary'][0]['sourceUrl']
-
-        if event_config.get('cdnToken'):
-            ap_resource = self._get_mvpd_resource(
-                event_config.get('resourceId', 'NBCOlympics'),
-                re.sub(r'[^\w\d ]+', '', event_config['eventTitle']), pid,
-                event_config.get('ratingId', 'NO VALUE'))
-            media_token = self._extract_mvpd_auth(url, pid, event_config.get('requestorId', 'NBCOlympics'), ap_resource)
-
-            source_url = self._download_json(
-                'https://tokens.playmakerservices.com/', pid, 'Retrieving tokenized URL',
-                data=json.dumps({
-                    'application': 'NBCSports',
-                    'authentication-type': 'adobe-pass',
-                    'cdn': 'akamai',
-                    'pid': pid,
-                    'platform': 'desktop',
-                    'requestorId': 'NBCOlympics',
-                    'resourceId': base64.b64encode(ap_resource.encode()).decode(),
-                    'token': base64.b64encode(media_token.encode()).decode(),
-                    'url': source_url,
-                    'version': 'v1',
-                }).encode(),
-            )['akamai'][0]['tokenizedUrl']
-
-        formats = self._extract_m3u8_formats(source_url, pid, 'mp4', live=is_live)
-        for f in formats:
-            # -http_seekable requires ffmpeg 4.3+ but it doesnt seem possible to
-            # download with ffmpeg without this option
-            f['_ffmpeg_args'] = ['-seekable', '0', '-http_seekable', '0', '-icy', '0']
+            self._DATA_URL_TEMPLATE % ('live_sources', pid),
+            pid)['videoSources'][0]['sourceUrl']
+        media_token = self._extract_mvpd_auth(
+            url, pid, event_config.get('requestorId', 'NBCOlympics'), resource)
+        formats = self._extract_m3u8_formats(self._download_webpage(
+            'http://sp.auth.adobe.com/tvs/v1/sign', pid, query={
+                'cdn': 'akamai',
+                'mediaToken': base64.b64encode(media_token.encode()),
+                'resource': base64.b64encode(resource.encode()),
+                'url': source_url,
+            }), pid, 'mp4')
         self._sort_formats(formats)
 
         return {
@@ -586,5 +536,5 @@ class NBCOlympicsStreamIE(AdobePassIE):
             'display_id': display_id,
             'title': title,
             'formats': formats,
-            'is_live': is_live,
+            'is_live': True,
         }

@@ -45,7 +45,6 @@ def aa_decode(aa_code):
 
 class XFileShareIE(InfoExtractor):
     _SITES = (
-        (r'aparat\.cam', 'Aparat'),
         (r'clipwatching\.com', 'ClipWatching'),
         (r'gounlimited\.to', 'GoUnlimited'),
         (r'govid\.me', 'GoVid'),
@@ -58,7 +57,6 @@ class XFileShareIE(InfoExtractor):
         (r'vidlocker\.xyz', 'VidLocker'),
         (r'vidshare\.tv', 'VidShare'),
         (r'vup\.to', 'VUp'),
-        (r'wolfstream\.tv', 'WolfStream'),
         (r'xvideosharing\.com', 'XVideoSharing'),
     )
 
@@ -80,12 +78,6 @@ class XFileShareIE(InfoExtractor):
             'title': 'sample',
             'thumbnail': r're:http://.*\.jpg',
         },
-    }, {
-        'url': 'https://aparat.cam/n4d6dh0wvlpr',
-        'only_matching': True,
-    }, {
-        'url': 'https://wolfstream.tv/nthme29v9u2x',
-        'only_matching': True,
     }]
 
     @staticmethod
@@ -98,7 +90,7 @@ class XFileShareIE(InfoExtractor):
                 webpage)]
 
     def _real_extract(self, url):
-        host, video_id = self._match_valid_url(url).groups()
+        host, video_id = re.match(self._VALID_URL, url).groups()
 
         url = 'https://%s/' % host + ('embed-%s.html' % video_id if host in ('govid.me', 'vidlo.us') else video_id)
         webpage = self._download_webpage(url, video_id)

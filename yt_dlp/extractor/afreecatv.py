@@ -6,11 +6,9 @@ import re
 from .common import InfoExtractor
 from ..compat import compat_xpath
 from ..utils import (
-    date_from_str,
     determine_ext,
     ExtractorError,
     int_or_none,
-    unified_strdate,
     url_or_none,
     urlencode_postdata,
     xpath_text,
@@ -239,7 +237,6 @@ class AfreecaTVIE(InfoExtractor):
             r'nTitleNo\s*=\s*(\d+)', webpage, 'title', default=video_id)
 
         partial_view = False
-        adult_view = False
         for _ in range(2):
             query = {
                 'nTitleNo': video_id,
@@ -248,8 +245,6 @@ class AfreecaTVIE(InfoExtractor):
             }
             if partial_view:
                 query['partialView'] = 'SKIP_ADULT'
-            if adult_view:
-                query['adultView'] = 'ADULT_VIEW'
             video_xml = self._download_xml(
                 'http://afbbs.afreecatv.com:8080/api/video/get_video_info.php',
                 video_id, 'Downloading video info XML%s'
@@ -262,16 +257,13 @@ class AfreecaTVIE(InfoExtractor):
             if flag and flag == 'SUCCEED':
                 break
             if flag == 'PARTIAL_ADULT':
-                self.report_warning(
+                self._downloader.report_warning(
                     'In accordance with local laws and regulations, underage users are restricted from watching adult content. '
                     'Only content suitable for all ages will be downloaded. '
                     'Provide account credentials if you wish to download restricted content.')
                 partial_view = True
                 continue
             elif flag == 'ADULT':
-                if not adult_view:
-                    adult_view = True
-                    continue
                 error = 'Only users older than 19 are able to watch this video. Provide account credentials to download this content.'
             else:
                 error = flag
@@ -317,15 +309,8 @@ class AfreecaTVIE(InfoExtractor):
                 if not file_url:
                     continue
                 key = file_element.get('key', '')
-                upload_date = unified_strdate(self._search_regex(
-                    r'^(\d{8})_', key, 'upload date', default=None))
-                if upload_date is not None:
-                    # sometimes the upload date isn't included in the file name
-                    # instead, another random ID is, which may parse as a valid
-                    # date but be wildly out of a reasonable range
-                    parsed_date = date_from_str(upload_date)
-                    if parsed_date.year < 2000 or parsed_date.year >= 2100:
-                        upload_date = None
+                upload_date = self._search_regex(
+                    r'^(\d{8})_', key, 'upload date', default=None)
                 file_duration = int_or_none(file_element.get('duration'))
                 format_id = key if key else '%s_%s' % (video_id, file_num)
                 if determine_ext(file_url) == 'm3u8':
@@ -338,7 +323,7 @@ class AfreecaTVIE(InfoExtractor):
                         'url': file_url,
                         'format_id': 'http',
                     }]
-                if not formats and not self.get_param('ignore_no_formats'):
+                if not formats:
                     continue
                 self._sort_formats(formats)
                 file_info = common_entry.copy()

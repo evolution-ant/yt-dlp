@@ -1,37 +1,30 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import functools
 import itertools
-import json
 import re
 
 from .common import InfoExtractor
-from ..compat import (
-    compat_etree_Element,
-    compat_HTTPError,
-    compat_str,
-    compat_urlparse,
-)
 from ..utils import (
-    ExtractorError,
-    OnDemandPagedList,
     clean_html,
     dict_get,
+    ExtractorError,
     float_or_none,
     get_element_by_class,
     int_or_none,
     js_to_json,
     parse_duration,
     parse_iso8601,
-    parse_qs,
-    strip_or_none,
     try_get,
     unescapeHTML,
-    unified_timestamp,
     url_or_none,
     urlencode_postdata,
     urljoin,
+)
+from ..compat import (
+    compat_etree_Element,
+    compat_HTTPError,
+    compat_urlparse,
 )
 
 
@@ -56,16 +49,21 @@ class BBCCoUkIE(InfoExtractor):
     _LOGIN_URL = 'https://account.bbc.com/signin'
     _NETRC_MACHINE = 'bbc'
 
-    _MEDIA_SELECTOR_URL_TEMPL = 'https://open.live.bbc.co.uk/mediaselector/6/select/version/2.0/mediaset/%s/vpid/%s'
-    _MEDIA_SETS = [
+    _MEDIASELECTOR_URLS = [
         # Provides HQ HLS streams with even better quality that pc mediaset but fails
         # with geolocation in some cases when it's even not geo restricted at all (e.g.
         # http://www.bbc.co.uk/programmes/b06bp7lf). Also may fail with selectionunavailable.
-        'iptv-all',
-        'pc',
+        'http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/iptv-all/vpid/%s',
+        'http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/pc/vpid/%s',
     ]
 
+    _MEDIASELECTION_NS = 'http://bbc.co.uk/2008/mp/mediaselection'
     _EMP_PLAYLIST_NS = 'http://bbc.co.uk/2008/emp/playlist'
+
+    _NAMESPACES = (
+        _MEDIASELECTION_NS,
+        _EMP_PLAYLIST_NS,
+    )
 
     _TESTS = [
         {
@@ -211,7 +209,7 @@ class BBCCoUkIE(InfoExtractor):
             },
             'skip': 'Now it\'s really geo-restricted',
         }, {
-            # compact player (https://github.com/ytdl-org/youtube-dl/issues/8147)
+            # compact player (https://github.com/ytdl-org/yt-dlp/issues/8147)
             'url': 'http://www.bbc.co.uk/programmes/p028bfkf/player',
             'info_dict': {
                 'id': 'p028bfkj',
@@ -263,6 +261,8 @@ class BBCCoUkIE(InfoExtractor):
             'only_matching': True,
         }]
 
+    _USP_RE = r'/([^/]+?)\.ism(?:\.hlsv2\.ism)?/[^/]+\.m3u8'
+
     def _login(self):
         username, password = self._get_login_info()
         if username is None:
@@ -307,14 +307,22 @@ class BBCCoUkIE(InfoExtractor):
     def _extract_items(self, playlist):
         return playlist.findall('./{%s}item' % self._EMP_PLAYLIST_NS)
 
+    def _findall_ns(self, element, xpath):
+        elements = []
+        for ns in self._NAMESPACES:
+            elements.extend(element.findall(xpath % ns))
+        return elements
+
     def _extract_medias(self, media_selection):
-        error = media_selection.get('result')
-        if error:
-            raise BBCCoUkIE.MediaSelectionError(error)
-        return media_selection.get('media') or []
+        error = media_selection.find('./{%s}error' % self._MEDIASELECTION_NS)
+        if error is None:
+            media_selection.find('./{%s}error' % self._EMP_PLAYLIST_NS)
+        if error is not None:
+            raise BBCCoUkIE.MediaSelectionError(error.get('id'))
+        return self._findall_ns(media_selection, './{%s}media')
 
     def _extract_connections(self, media):
-        return media.get('connection') or []
+        return self._findall_ns(media, './{%s}connection')
 
     def _get_subtitles(self, media, programme_id):
         subtitles = {}
@@ -326,13 +334,13 @@ class BBCCoUkIE(InfoExtractor):
                 cc_url, programme_id, 'Downloading captions', fatal=False)
             if not isinstance(captions, compat_etree_Element):
                 continue
-            subtitles['en'] = [
+            lang = captions.get('{http://www.w3.org/XML/1998/namespace}lang', 'en')
+            subtitles[lang] = [
                 {
                     'url': connection.get('href'),
                     'ext': 'ttml',
                 },
             ]
-            break
         return subtitles
 
     def _raise_extractor_error(self, media_selection_error):
@@ -342,10 +350,10 @@ class BBCCoUkIE(InfoExtractor):
 
     def _download_media_selector(self, programme_id):
         last_exception = None
-        for media_set in self._MEDIA_SETS:
+        for mediaselector_url in self._MEDIASELECTOR_URLS:
             try:
                 return self._download_media_selector_url(
-                    self._MEDIA_SELECTOR_URL_TEMPL % (media_set, programme_id), programme_id)
+                    mediaselector_url % programme_id, programme_id)
             except BBCCoUkIE.MediaSelectionError as e:
                 if e.id in ('notukerror', 'geolocation', 'selectionunavailable'):
                     last_exception = e
@@ -354,8 +362,8 @@ class BBCCoUkIE(InfoExtractor):
         self._raise_extractor_error(last_exception)
 
     def _download_media_selector_url(self, url, programme_id=None):
-        media_selection = self._download_json(
-            url, programme_id, 'Downloading media selection JSON',
+        media_selection = self._download_xml(
+            url, programme_id, 'Downloading media selection XML',
             expected_status=(403, 404))
         return self._process_media_selector(media_selection, programme_id)
 
@@ -369,6 +377,7 @@ class BBCCoUkIE(InfoExtractor):
             if kind in ('video', 'audio'):
                 bitrate = int_or_none(media.get('bitrate'))
                 encoding = media.get('encoding')
+                service = media.get('service')
                 width = int_or_none(media.get('width'))
                 height = int_or_none(media.get('height'))
                 file_size = int_or_none(media.get('media_file_size'))
@@ -383,6 +392,8 @@ class BBCCoUkIE(InfoExtractor):
                     supplier = connection.get('supplier')
                     transfer_format = connection.get('transferFormat')
                     format_id = supplier or conn_kind or protocol
+                    if service:
+                        format_id = '%s_%s' % (service, format_id)
                     # ASX playlist
                     if supplier == 'asx':
                         for i, ref in enumerate(self._extract_asx_playlist(connection, programme_id)):
@@ -397,11 +408,20 @@ class BBCCoUkIE(InfoExtractor):
                         formats.extend(self._extract_m3u8_formats(
                             href, programme_id, ext='mp4', entry_protocol='m3u8_native',
                             m3u8_id=format_id, fatal=False))
+                        if re.search(self._USP_RE, href):
+                            usp_formats = self._extract_m3u8_formats(
+                                re.sub(self._USP_RE, r'/\1.ism/\1.m3u8', href),
+                                programme_id, ext='mp4', entry_protocol='m3u8_native',
+                                m3u8_id=format_id, fatal=False)
+                            for f in usp_formats:
+                                if f.get('height') and f['height'] > 720:
+                                    continue
+                                formats.append(f)
                     elif transfer_format == 'hds':
                         formats.extend(self._extract_f4m_formats(
                             href, programme_id, f4m_id=format_id, fatal=False))
                     else:
-                        if not supplier and bitrate:
+                        if not service and not supplier and bitrate:
                             format_id += '-%d' % bitrate
                         fmt = {
                             'format_id': format_id,
@@ -451,10 +471,9 @@ class BBCCoUkIE(InfoExtractor):
             playlist = self._download_json(
                 'http://www.bbc.co.uk/programmes/%s/playlist.json' % playlist_id,
                 playlist_id, 'Downloading playlist JSON')
-            formats = []
-            subtitles = {}
 
-            for version in playlist.get('allAvailableVersions', []):
+            version = playlist.get('defaultAvailableVersion')
+            if version:
                 smp_config = version['smpConfig']
                 title = smp_config['title']
                 description = smp_config['summary']
@@ -464,17 +483,8 @@ class BBCCoUkIE(InfoExtractor):
                         continue
                     programme_id = item.get('vpid')
                     duration = int_or_none(item.get('duration'))
-                    version_formats, version_subtitles = self._download_media_selector(programme_id)
-                    types = version['types']
-                    for f in version_formats:
-                        f['format_note'] = ', '.join(types)
-                        if any('AudioDescribed' in x for x in types):
-                            f['language_preference'] = -10
-                    formats += version_formats
-                    for tag, subformats in (version_subtitles or {}).items():
-                        subtitles.setdefault(tag, []).extend(subformats)
-
-            return programme_id, title, description, duration, formats, subtitles
+                    formats, subtitles = self._download_media_selector(programme_id)
+                return programme_id, title, description, duration, formats, subtitles
         except ExtractorError as ee:
             if not (isinstance(ee.cause, compat_HTTPError) and ee.cause.code == 404):
                 raise
@@ -544,7 +554,7 @@ class BBCCoUkIE(InfoExtractor):
         webpage = self._download_webpage(url, group_id, 'Downloading video page')
 
         error = self._search_regex(
-            r'<div\b[^>]+\bclass=["\'](?:smp|playout)__message delta["\'][^>]*>\s*([^<]+?)\s*<',
+            r'<div\b[^>]+\bclass=["\']smp__message delta["\'][^>]*>([^<]+)<',
             webpage, 'error', default=None)
         if error:
             raise ExtractorError(error, expected=True)
@@ -597,9 +607,16 @@ class BBCIE(BBCCoUkIE):
     IE_DESC = 'BBC'
     _VALID_URL = r'https?://(?:www\.)?bbc\.(?:com|co\.uk)/(?:[^/]+/)+(?P<id>[^/#?]+)'
 
-    _MEDIA_SETS = [
-        'pc',
-        'mobile-tablet-main',
+    _MEDIASELECTOR_URLS = [
+        # Provides HQ HLS streams but fails with geolocation in some cases when it's
+        # even not geo restricted at all
+        'http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/iptv-all/vpid/%s',
+        # Provides more formats, namely direct mp4 links, but fails on some videos with
+        # notukerror for non UK (?) users (e.g.
+        # http://www.bbc.com/travel/story/20150625-sri-lankas-spicy-secret)
+        'http://open.live.bbc.co.uk/mediaselector/4/mtis/stream/%s',
+        # Provides fewer formats, but works everywhere for everybody (hopefully)
+        'http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/journalism-pc/vpid/%s',
     ]
 
     _TESTS = [{
@@ -773,17 +790,8 @@ class BBCIE(BBCCoUkIE):
         'only_matching': True,
     }, {
         # custom redirection to www.bbc.com
-        # also, video with window.__INITIAL_DATA__
         'url': 'http://www.bbc.co.uk/news/science-environment-33661876',
-        'info_dict': {
-            'id': 'p02xzws1',
-            'ext': 'mp4',
-            'title': "Pluto may have 'nitrogen glaciers'",
-            'description': 'md5:6a95b593f528d7a5f2605221bc56912f',
-            'thumbnail': r're:https?://.+/.+\.jpg',
-            'timestamp': 1437785037,
-            'upload_date': '20150725',
-        },
+        'only_matching': True,
     }, {
         # single video article embedded with data-media-vpid
         'url': 'http://www.bbc.co.uk/sport/rowing/35908187',
@@ -819,25 +827,11 @@ class BBCIE(BBCCoUkIE):
             'description': 'Learn English words and phrases from this story',
         },
         'add_ie': [BBCCoUkIE.ie_key()],
-    }, {
-        # BBC Reel
-        'url': 'https://www.bbc.com/reel/video/p07c6sb6/how-positive-thinking-is-harming-your-happiness',
-        'info_dict': {
-            'id': 'p07c6sb9',
-            'ext': 'mp4',
-            'title': 'How positive thinking is harming your happiness',
-            'alt_title': 'The downsides of positive thinking',
-            'description': 'md5:fad74b31da60d83b8265954ee42d85b4',
-            'duration': 235,
-            'thumbnail': r're:https?://.+/p07c9dsr.jpg',
-            'upload_date': '20190604',
-            'categories': ['Psychology'],
-        },
     }]
 
     @classmethod
     def suitable(cls, url):
-        EXCLUDE_IE = (BBCCoUkIE, BBCCoUkArticleIE, BBCCoUkIPlayerEpisodesIE, BBCCoUkIPlayerGroupIE, BBCCoUkPlaylistIE)
+        EXCLUDE_IE = (BBCCoUkIE, BBCCoUkArticleIE, BBCCoUkIPlayerPlaylistIE, BBCCoUkPlaylistIE)
         return (False if any(ie.suitable(url) for ie in EXCLUDE_IE)
                 else super(BBCIE, cls).suitable(url))
 
@@ -969,7 +963,7 @@ class BBCIE(BBCCoUkIE):
                                     else:
                                         entry['title'] = info['title']
                                         entry['formats'].extend(info['formats'])
-                                except ExtractorError as e:
+                                except Exception as e:
                                     # Some playlist URL may fail with 500, at the same time
                                     # the other one may work fine (e.g.
                                     # http://www.bbc.com/turkce/haberler/2015/06/150615_telabyad_kentin_cogu)
@@ -1019,37 +1013,6 @@ class BBCIE(BBCCoUkIE):
                 'formats': formats,
                 'subtitles': subtitles,
             }
-
-        # bbc reel (e.g. https://www.bbc.com/reel/video/p07c6sb6/how-positive-thinking-is-harming-your-happiness)
-        initial_data = self._parse_json(self._html_search_regex(
-            r'<script[^>]+id=(["\'])initial-data\1[^>]+data-json=(["\'])(?P<json>(?:(?!\2).)+)',
-            webpage, 'initial data', default='{}', group='json'), playlist_id, fatal=False)
-        if initial_data:
-            init_data = try_get(
-                initial_data, lambda x: x['initData']['items'][0], dict) or {}
-            smp_data = init_data.get('smpData') or {}
-            clip_data = try_get(smp_data, lambda x: x['items'][0], dict) or {}
-            version_id = clip_data.get('versionID')
-            if version_id:
-                title = smp_data['title']
-                formats, subtitles = self._download_media_selector(version_id)
-                self._sort_formats(formats)
-                image_url = smp_data.get('holdingImageURL')
-                display_date = init_data.get('displayDate')
-                topic_title = init_data.get('topicTitle')
-
-                return {
-                    'id': version_id,
-                    'title': title,
-                    'formats': formats,
-                    'alt_title': init_data.get('shortTitle'),
-                    'thumbnail': image_url.replace('$recipe', 'raw') if image_url else None,
-                    'description': smp_data.get('summary') or init_data.get('shortSummary'),
-                    'upload_date': display_date.replace('-', '') if display_date else None,
-                    'subtitles': subtitles,
-                    'duration': int_or_none(clip_data.get('duration')),
-                    'categories': [topic_title] if topic_title else None,
-                }
 
         # Morph based embed (e.g. http://www.bbc.co.uk/sport/live/olympics/36895975)
         # There are several setPayload calls may be present but the video
@@ -1112,7 +1075,7 @@ class BBCIE(BBCCoUkIE):
                 thumbnail = None
                 image_url = current_programme.get('image_url')
                 if image_url:
-                    thumbnail = image_url.replace('{recipe}', 'raw')
+                    thumbnail = image_url.replace('{recipe}', '1920x1920')
                 return {
                     'id': programme_id,
                     'title': title,
@@ -1185,29 +1148,12 @@ class BBCIE(BBCCoUkIE):
                         continue
                     formats, subtitles = self._download_media_selector(item_id)
                     self._sort_formats(formats)
-                    item_desc = None
-                    blocks = try_get(media, lambda x: x['summary']['blocks'], list)
-                    if blocks:
-                        summary = []
-                        for block in blocks:
-                            text = try_get(block, lambda x: x['model']['text'], compat_str)
-                            if text:
-                                summary.append(text)
-                        if summary:
-                            item_desc = '\n\n'.join(summary)
-                    item_time = None
-                    for meta in try_get(media, lambda x: x['metadata']['items'], list) or []:
-                        if try_get(meta, lambda x: x['label']) == 'Published':
-                            item_time = unified_timestamp(meta.get('timestamp'))
-                            break
                     entries.append({
                         'id': item_id,
                         'title': item_title,
                         'thumbnail': item.get('holdingImageUrl'),
                         'formats': formats,
                         'subtitles': subtitles,
-                        'timestamp': item_time,
-                        'description': strip_or_none(item_desc),
                     })
             for resp in (initial_data.get('data') or {}).values():
                 name = resp.get('name')
@@ -1280,7 +1226,7 @@ class BBCIE(BBCCoUkIE):
         entries = []
         for num, media_meta in enumerate(medias, start=1):
             formats, subtitles = self._extract_from_media_meta(media_meta, playlist_id)
-            if not formats and not self.get_param('ignore_no_formats'):
+            if not formats:
                 continue
             self._sort_formats(formats)
 
@@ -1381,149 +1327,21 @@ class BBCCoUkPlaylistBaseIE(InfoExtractor):
             playlist_id, title, description)
 
 
-class BBCCoUkIPlayerPlaylistBaseIE(InfoExtractor):
-    _VALID_URL_TMPL = r'https?://(?:www\.)?bbc\.co\.uk/iplayer/%%s/(?P<id>%s)' % BBCCoUkIE._ID_REGEX
-
-    @staticmethod
-    def _get_default(episode, key, default_key='default'):
-        return try_get(episode, lambda x: x[key][default_key])
-
-    def _get_description(self, data):
-        synopsis = data.get(self._DESCRIPTION_KEY) or {}
-        return dict_get(synopsis, ('large', 'medium', 'small'))
-
-    def _fetch_page(self, programme_id, per_page, series_id, page):
-        elements = self._get_elements(self._call_api(
-            programme_id, per_page, page + 1, series_id))
-        for element in elements:
-            episode = self._get_episode(element)
-            episode_id = episode.get('id')
-            if not episode_id:
-                continue
-            thumbnail = None
-            image = self._get_episode_image(episode)
-            if image:
-                thumbnail = image.replace('{recipe}', 'raw')
-            category = self._get_default(episode, 'labels', 'category')
-            yield {
-                '_type': 'url',
-                'id': episode_id,
-                'title': self._get_episode_field(episode, 'subtitle'),
-                'url': 'https://www.bbc.co.uk/iplayer/episode/' + episode_id,
-                'thumbnail': thumbnail,
-                'description': self._get_description(episode),
-                'categories': [category] if category else None,
-                'series': self._get_episode_field(episode, 'title'),
-                'ie_key': BBCCoUkIE.ie_key(),
-            }
-
-    def _real_extract(self, url):
-        pid = self._match_id(url)
-        qs = parse_qs(url)
-        series_id = qs.get('seriesId', [None])[0]
-        page = qs.get('page', [None])[0]
-        per_page = 36 if page else self._PAGE_SIZE
-        fetch_page = functools.partial(self._fetch_page, pid, per_page, series_id)
-        entries = fetch_page(int(page) - 1) if page else OnDemandPagedList(fetch_page, self._PAGE_SIZE)
-        playlist_data = self._get_playlist_data(self._call_api(pid, 1))
-        return self.playlist_result(
-            entries, pid, self._get_playlist_title(playlist_data),
-            self._get_description(playlist_data))
-
-
-class BBCCoUkIPlayerEpisodesIE(BBCCoUkIPlayerPlaylistBaseIE):
-    IE_NAME = 'bbc.co.uk:iplayer:episodes'
-    _VALID_URL = BBCCoUkIPlayerPlaylistBaseIE._VALID_URL_TMPL % 'episodes'
+class BBCCoUkIPlayerPlaylistIE(BBCCoUkPlaylistBaseIE):
+    IE_NAME = 'bbc.co.uk:iplayer:playlist'
+    _VALID_URL = r'https?://(?:www\.)?bbc\.co\.uk/iplayer/(?:episodes|group)/(?P<id>%s)' % BBCCoUkIE._ID_REGEX
+    _URL_TEMPLATE = 'http://www.bbc.co.uk/iplayer/episode/%s'
+    _VIDEO_ID_TEMPLATE = r'data-ip-id=["\'](%s)'
     _TESTS = [{
         'url': 'http://www.bbc.co.uk/iplayer/episodes/b05rcz9v',
         'info_dict': {
             'id': 'b05rcz9v',
             'title': 'The Disappearance',
-            'description': 'md5:58eb101aee3116bad4da05f91179c0cb',
+            'description': 'French thriller serial about a missing teenager.',
         },
-        'playlist_mincount': 8,
+        'playlist_mincount': 6,
+        'skip': 'This programme is not currently available on BBC iPlayer',
     }, {
-        # all seasons
-        'url': 'https://www.bbc.co.uk/iplayer/episodes/b094m5t9/doctor-foster',
-        'info_dict': {
-            'id': 'b094m5t9',
-            'title': 'Doctor Foster',
-            'description': 'md5:5aa9195fad900e8e14b52acd765a9fd6',
-        },
-        'playlist_mincount': 10,
-    }, {
-        # explicit season
-        'url': 'https://www.bbc.co.uk/iplayer/episodes/b094m5t9/doctor-foster?seriesId=b094m6nv',
-        'info_dict': {
-            'id': 'b094m5t9',
-            'title': 'Doctor Foster',
-            'description': 'md5:5aa9195fad900e8e14b52acd765a9fd6',
-        },
-        'playlist_mincount': 5,
-    }, {
-        # all pages
-        'url': 'https://www.bbc.co.uk/iplayer/episodes/m0004c4v/beechgrove',
-        'info_dict': {
-            'id': 'm0004c4v',
-            'title': 'Beechgrove',
-            'description': 'Gardening show that celebrates Scottish horticulture and growing conditions.',
-        },
-        'playlist_mincount': 37,
-    }, {
-        # explicit page
-        'url': 'https://www.bbc.co.uk/iplayer/episodes/m0004c4v/beechgrove?page=2',
-        'info_dict': {
-            'id': 'm0004c4v',
-            'title': 'Beechgrove',
-            'description': 'Gardening show that celebrates Scottish horticulture and growing conditions.',
-        },
-        'playlist_mincount': 1,
-    }]
-    _PAGE_SIZE = 100
-    _DESCRIPTION_KEY = 'synopsis'
-
-    def _get_episode_image(self, episode):
-        return self._get_default(episode, 'image')
-
-    def _get_episode_field(self, episode, field):
-        return self._get_default(episode, field)
-
-    @staticmethod
-    def _get_elements(data):
-        return data['entities']['results']
-
-    @staticmethod
-    def _get_episode(element):
-        return element.get('episode') or {}
-
-    def _call_api(self, pid, per_page, page=1, series_id=None):
-        variables = {
-            'id': pid,
-            'page': page,
-            'perPage': per_page,
-        }
-        if series_id:
-            variables['sliceId'] = series_id
-        return self._download_json(
-            'https://graph.ibl.api.bbc.co.uk/', pid, headers={
-                'Content-Type': 'application/json'
-            }, data=json.dumps({
-                'id': '5692d93d5aac8d796a0305e895e61551',
-                'variables': variables,
-            }).encode('utf-8'))['data']['programme']
-
-    @staticmethod
-    def _get_playlist_data(data):
-        return data
-
-    def _get_playlist_title(self, data):
-        return self._get_default(data, 'title')
-
-
-class BBCCoUkIPlayerGroupIE(BBCCoUkIPlayerPlaylistBaseIE):
-    IE_NAME = 'bbc.co.uk:iplayer:group'
-    _VALID_URL = BBCCoUkIPlayerPlaylistBaseIE._VALID_URL_TMPL % 'group'
-    _TESTS = [{
         # Available for over a year unlike 30 days for most other programmes
         'url': 'http://www.bbc.co.uk/iplayer/group/p02tcc32',
         'info_dict': {
@@ -1532,56 +1350,14 @@ class BBCCoUkIPlayerGroupIE(BBCCoUkIPlayerPlaylistBaseIE):
             'description': 'md5:683e901041b2fe9ba596f2ab04c4dbe7',
         },
         'playlist_mincount': 10,
-    }, {
-        # all pages
-        'url': 'https://www.bbc.co.uk/iplayer/group/p081d7j7',
-        'info_dict': {
-            'id': 'p081d7j7',
-            'title': 'Music in Scotland',
-            'description': 'Perfomances in Scotland and programmes featuring Scottish acts.',
-        },
-        'playlist_mincount': 47,
-    }, {
-        # explicit page
-        'url': 'https://www.bbc.co.uk/iplayer/group/p081d7j7?page=2',
-        'info_dict': {
-            'id': 'p081d7j7',
-            'title': 'Music in Scotland',
-            'description': 'Perfomances in Scotland and programmes featuring Scottish acts.',
-        },
-        'playlist_mincount': 11,
     }]
-    _PAGE_SIZE = 200
-    _DESCRIPTION_KEY = 'synopses'
 
-    def _get_episode_image(self, episode):
-        return self._get_default(episode, 'images', 'standard')
-
-    def _get_episode_field(self, episode, field):
-        return episode.get(field)
-
-    @staticmethod
-    def _get_elements(data):
-        return data['elements']
-
-    @staticmethod
-    def _get_episode(element):
-        return element
-
-    def _call_api(self, pid, per_page, page=1, series_id=None):
-        return self._download_json(
-            'http://ibl.api.bbc.co.uk/ibl/v1/groups/%s/episodes' % pid,
-            pid, query={
-                'page': page,
-                'per_page': per_page,
-            })['group_episodes']
-
-    @staticmethod
-    def _get_playlist_data(data):
-        return data['group']
-
-    def _get_playlist_title(self, data):
-        return data.get('title')
+    def _extract_title_and_description(self, webpage):
+        title = self._search_regex(r'<h1>([^<]+)</h1>', webpage, 'title', fatal=False)
+        description = self._search_regex(
+            r'<p[^>]+class=(["\'])subtitle\1[^>]*>(?P<value>[^<]+)</p>',
+            webpage, 'description', fatal=False, group='value')
+        return title, description
 
 
 class BBCCoUkPlaylistIE(BBCCoUkPlaylistBaseIE):

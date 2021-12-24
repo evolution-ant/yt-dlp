@@ -29,7 +29,7 @@ class DRTVIE(InfoExtractor):
                     https?://
                         (?:
                             (?:www\.)?dr\.dk/(?:tv/se|nyheder|radio(?:/ondemand)?)/(?:[^/]+/)*|
-                            (?:www\.)?(?:dr\.dk|dr-massive\.com)/drtv/(?:se|episode|program)/
+                            (?:www\.)?(?:dr\.dk|dr-massive\.com)/drtv/(?:se|episode)/
                         )
                         (?P<id>[\da-z_-]+)
                     '''
@@ -110,9 +110,6 @@ class DRTVIE(InfoExtractor):
         'only_matching': True,
     }, {
         'url': 'https://dr-massive.com/drtv/se/bonderoeven_71769',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.dr.dk/drtv/program/jagten_220924',
         'only_matching': True,
     }]
 
@@ -242,7 +239,7 @@ class DRTVIE(InfoExtractor):
                     elif target == 'HLS':
                         formats.extend(self._extract_m3u8_formats(
                             uri, video_id, 'mp4', entry_protocol='m3u8_native',
-                            quality=preference, m3u8_id=format_id,
+                            preference=preference, m3u8_id=format_id,
                             fatal=False))
                     else:
                         bitrate = link.get('Bitrate')
@@ -254,7 +251,7 @@ class DRTVIE(InfoExtractor):
                             'tbr': int_or_none(bitrate),
                             'ext': link.get('FileFormat'),
                             'vcodec': 'none' if kind == 'AudioResource' else None,
-                            'quality': preference,
+                            'preference': preference,
                         })
             subtitles_list = asset.get('SubtitlesList') or asset.get('Subtitleslist')
             if isinstance(subtitles_list, list):
@@ -321,7 +318,7 @@ class DRTVLiveIE(InfoExtractor):
         channel_data = self._download_json(
             'https://www.dr.dk/mu-online/api/1.0/channel/' + channel_id,
             channel_id)
-        title = channel_data['Title']
+        title = self._live_title(channel_data['Title'])
 
         formats = []
         for streaming_server in channel_data.get('StreamingServers', []):

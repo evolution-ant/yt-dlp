@@ -67,7 +67,7 @@ class MassengeschmackTVIE(InfoExtractor):
                 'vcodec': 'none' if format_id.startswith('Audio') else None,
             })
 
-        self._sort_formats(formats)
+        self._sort_formats(formats, ('width', 'height', 'filesize', 'tbr'))
 
         return {
             'id': episode,

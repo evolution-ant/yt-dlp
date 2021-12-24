@@ -2,9 +2,12 @@
 from __future__ import unicode_literals
 
 from .common import InfoExtractor
+from ..compat import (
+    compat_urllib_parse_urlparse,
+    compat_parse_qs,
+)
 from ..utils import (
     clean_html,
-    parse_qs,
     remove_start,
 )
 
@@ -56,7 +59,7 @@ class Varzesh3IE(InfoExtractor):
             fb_sharer_url = self._search_regex(
                 r'<a[^>]+href="(https?://www\.facebook\.com/sharer/sharer\.php?[^"]+)"',
                 webpage, 'facebook sharer URL', fatal=False)
-            sharer_params = parse_qs(fb_sharer_url)
+            sharer_params = compat_parse_qs(compat_urllib_parse_urlparse(fb_sharer_url).query)
             thumbnail = sharer_params.get('p[images][0]', [None])[0]
 
         video_id = self._search_regex(

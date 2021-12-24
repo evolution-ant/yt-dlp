@@ -21,11 +21,6 @@ class URPlayIE(InfoExtractor):
             'description': 'md5:5344508a52aa78c1ced6c1b8b9e44e9a',
             'timestamp': 1513292400,
             'upload_date': '20171214',
-            'series': 'UR Samtiden - Livet, universum och rymdens märkliga musik',
-            'duration': 2269,
-            'categories': ['Kultur & historia'],
-            'tags': ['Kritiskt tänkande', 'Vetenskap', 'Vetenskaplig verksamhet'],
-            'episode': 'Om vetenskap, kritiskt tänkande och motstånd',
         },
     }, {
         'url': 'https://urskola.se/Produkter/190031-Tripp-Trapp-Trad-Sovkudde',
@@ -36,10 +31,6 @@ class URPlayIE(InfoExtractor):
             'description': 'md5:b86bffdae04a7e9379d1d7e5947df1d1',
             'timestamp': 1440086400,
             'upload_date': '20150820',
-            'series': 'Tripp, Trapp, Träd',
-            'duration': 865,
-            'tags': ['Sova'],
-            'episode': 'Sovkudde',
         },
     }, {
         'url': 'http://urskola.se/Produkter/155794-Smasagor-meankieli-Grodan-i-vida-varlden',
@@ -50,18 +41,17 @@ class URPlayIE(InfoExtractor):
         video_id = self._match_id(url)
         url = url.replace('skola.se/Produkter', 'play.se/program')
         webpage = self._download_webpage(url, video_id)
-        vid = int(video_id)
-        accessible_episodes = self._parse_json(self._html_search_regex(
-            r'data-react-class="routes/Product/components/ProgramContainer/ProgramContainer"[^>]+data-react-props="({.+?})"',
-            webpage, 'urplayer data'), video_id)['accessibleEpisodes']
-        urplayer_data = next(e for e in accessible_episodes if e.get('id') == vid)
+        urplayer_data = self._parse_json(self._html_search_regex(
+            r'data-react-class="components/Player/Player"[^>]+data-react-props="({.+?})"',
+            webpage, 'urplayer data'), video_id)['currentProduct']
         episode = urplayer_data['title']
+        raw_streaming_info = urplayer_data['streamingInfo']['raw']
+        host = self._download_json(
+            'http://streaming-loadbalancer.ur.se/loadbalancer.json',
+            video_id)['redirect']
 
-        host = self._download_json('http://streaming-loadbalancer.ur.se/loadbalancer.json', video_id)['redirect']
         formats = []
-        urplayer_streams = urplayer_data.get('streamingInfo', {})
-
-        for k, v in urplayer_streams.get('raw', {}).items():
+        for k, v in raw_streaming_info.items():
             if not (k in ('sd', 'hd') and isinstance(v, dict)):
                 continue
             file_http = v.get('location')
@@ -70,13 +60,6 @@ class URPlayIE(InfoExtractor):
                     'http://%s/%splaylist.m3u8' % (host, file_http),
                     video_id, skip_protocols=['f4m', 'rtmp', 'rtsp']))
         self._sort_formats(formats)
-
-        subtitles = {}
-        subs = urplayer_streams.get("sweComplete", {}).get("tt", {}).get("location")
-        if subs:
-            subtitles.setdefault('Svenska', []).append({
-                'url': subs,
-            })
 
         image = urplayer_data.get('image') or {}
         thumbnails = []
@@ -98,7 +81,6 @@ class URPlayIE(InfoExtractor):
 
         return {
             'id': video_id,
-            'subtitles': subtitles,
             'title': '%s : %s' % (series_title, episode) if series_title else episode,
             'description': urplayer_data.get('description'),
             'thumbnails': thumbnails,

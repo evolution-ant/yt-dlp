@@ -26,8 +26,8 @@ class CommonMistakesIE(InfoExtractor):
             'That doesn\'t make any sense. '
             'Simply remove the parameter in your command or configuration.'
         ) % url
-        if not self.get_param('verbose'):
-            msg += ' Add -v to the command line to see what arguments and configuration yt-dlp has'
+        if not self._downloader.params.get('verbose'):
+            msg += ' Add -v to the command line to see what arguments and configuration yt-dlp got.'
         raise ExtractorError(msg, expected=True)
 
 
@@ -36,7 +36,7 @@ class UnicodeBOMIE(InfoExtractor):
     _VALID_URL = r'(?P<bom>\ufeff)(?P<id>.*)$'
 
     # Disable test for python 3.2 since BOM is broken in re in this version
-    # (see https://github.com/ytdl-org/youtube-dl/issues/9751)
+    # (see https://github.com/ytdl-org/yt-dlp/issues/9751)
     _TESTS = [] if (3, 0) < sys.version_info <= (3, 3) else [{
         'url': '\ufeffhttp://www.youtube.com/watch?v=BaW_jenozKc',
         'only_matching': True,

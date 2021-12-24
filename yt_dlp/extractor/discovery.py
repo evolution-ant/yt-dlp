@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import random
+import re
 import string
 
 from .discoverygo import DiscoveryGoBaseIE
@@ -61,7 +62,7 @@ class DiscoveryIE(DiscoveryGoBaseIE):
     _API_BASE_URL = 'https://api.discovery.com/v1/'
 
     def _real_extract(self, url):
-        site, show_slug, display_id = self._match_valid_url(url).groups()
+        site, show_slug, display_id = re.match(self._VALID_URL, url).groups()
 
         access_token = None
         cookies = self._get_cookies(url)

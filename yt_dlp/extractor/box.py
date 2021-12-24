@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import json
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -29,7 +30,7 @@ class BoxIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        shared_name, file_id = self._match_valid_url(url).groups()
+        shared_name, file_id = re.match(self._VALID_URL, url).groups()
         webpage = self._download_webpage(url, file_id)
         request_token = self._parse_json(self._search_regex(
             r'Box\.config\s*=\s*({.+?});', webpage,

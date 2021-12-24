@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import hashlib
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -137,7 +138,7 @@ class FC2EmbedIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         query = compat_parse_qs(mobj.group('query'))
 
         video_id = query['i'][-1]

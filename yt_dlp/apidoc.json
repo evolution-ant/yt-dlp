@@ -1,0 +1,8 @@
+{
+  "name": "YoutubeDL API",
+  "version": "1.0.0",
+  "description": "YoutubeDL API",
+  "title": "YoutubeDL API",
+  "url" : "/",
+  "sampleUrl":"http://0.0.0.0:8000"
+}

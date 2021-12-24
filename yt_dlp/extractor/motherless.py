@@ -61,23 +61,6 @@ class MotherlessIE(InfoExtractor):
         # no keywords
         'url': 'http://motherless.com/8B4BBC1',
         'only_matching': True,
-    }, {
-        # see https://motherless.com/videos/recent for recent videos with
-        # uploaded date in "ago" format
-        'url': 'https://motherless.com/3C3E2CF',
-        'info_dict': {
-            'id': '3C3E2CF',
-            'ext': 'mp4',
-            'title': 'a/ Hot Teens',
-            'categories': list,
-            'upload_date': '20210104',
-            'uploader_id': 'yonbiw',
-            'thumbnail': r're:https?://.*\.jpg',
-            'age_limit': 18,
-        },
-        'params': {
-            'skip_download': True,
-        },
     }]
 
     def _real_extract(self, url):
@@ -102,34 +85,26 @@ class MotherlessIE(InfoExtractor):
             or 'http://cdn4.videos.motherlessmedia.com/videos/%s.mp4?fs=opencloud' % video_id)
         age_limit = self._rta_search(webpage)
         view_count = str_to_int(self._html_search_regex(
-            (r'>([\d,.]+)\s+Views<', r'<strong>Views</strong>\s+([^<]+)<'),
+            (r'>(\d+)\s+Views<', r'<strong>Views</strong>\s+([^<]+)<'),
             webpage, 'view count', fatal=False))
         like_count = str_to_int(self._html_search_regex(
-            (r'>([\d,.]+)\s+Favorites<',
-             r'<strong>Favorited</strong>\s+([^<]+)<'),
+            (r'>(\d+)\s+Favorites<', r'<strong>Favorited</strong>\s+([^<]+)<'),
             webpage, 'like count', fatal=False))
 
-        upload_date = unified_strdate(self._search_regex(
-            r'class=["\']count[^>]+>(\d+\s+[a-zA-Z]{3}\s+\d{4})<', webpage,
-            'upload date', default=None))
-        if not upload_date:
-            uploaded_ago = self._search_regex(
-                r'>\s*(\d+[hd])\s+[aA]go\b', webpage, 'uploaded ago',
-                default=None)
-            if uploaded_ago:
-                delta = int(uploaded_ago[:-1])
-                _AGO_UNITS = {
-                    'h': 'hours',
-                    'd': 'days',
-                }
-                kwargs = {_AGO_UNITS.get(uploaded_ago[-1]): delta}
-                upload_date = (datetime.datetime.utcnow() - datetime.timedelta(**kwargs)).strftime('%Y%m%d')
+        upload_date = self._html_search_regex(
+            (r'class=["\']count[^>]+>(\d+\s+[a-zA-Z]{3}\s+\d{4})<',
+             r'<strong>Uploaded</strong>\s+([^<]+)<'), webpage, 'upload date')
+        if 'Ago' in upload_date:
+            days = int(re.search(r'([0-9]+)', upload_date).group(1))
+            upload_date = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y%m%d')
+        else:
+            upload_date = unified_strdate(upload_date)
 
         comment_count = webpage.count('class="media-comment-contents"')
         uploader_id = self._html_search_regex(
-            (r'"media-meta-member">\s+<a href="/m/([^"]+)"',
-             r'<span\b[^>]+\bclass="username">([^<]+)</span>'),
-            webpage, 'uploader_id', fatal=False)
+            r'"thumb-member-username">\s+<a href="/m/([^"]+)"',
+            webpage, 'uploader_id')
+
         categories = self._html_search_meta('keywords', webpage, default=None)
         if categories:
             categories = [cat.strip() for cat in categories.split(',')]
@@ -169,18 +144,7 @@ class MotherlessGroupIE(InfoExtractor):
             'description': 'Sex can be funny. Wide smiles,laugh, games, fun of '
                            'any kind!'
         },
-        'playlist_mincount': 0,
-        'expected_warnings': [
-            'This group has no videos.',
-        ]
-    }, {
-        'url': 'https://motherless.com/g/beautiful_cock',
-        'info_dict': {
-            'id': 'beautiful_cock',
-            'title': 'Beautiful Cock',
-            'description': 'Group for lovely cocks yours, mine, a friends anything human',
-        },
-        'playlist_mincount': 2500,
+        'playlist_mincount': 9,
     }]
 
     @classmethod
@@ -220,18 +184,11 @@ class MotherlessGroupIE(InfoExtractor):
         description = self._html_search_meta(
             'description', webpage, fatal=False)
         page_count = self._int(self._search_regex(
-            r'(\d+)</(?:a|span)><(?:a|span)[^>]+rel="next">',
-            webpage, 'page_count', default=0), 'page_count')
-        if not page_count:
-            message = self._search_regex(
-                r'class="error-page"[^>]*>\s*<p[^>]*>\s*(?P<error_msg>[^<]+)(?<=\S)\s*',
-                webpage, 'error_msg', default=None) or 'This group has no videos.'
-            self.report_warning(message, group_id)
+            r'(\d+)</(?:a|span)><(?:a|span)[^>]+>\s*NEXT',
+            webpage, 'page_count'), 'page_count')
         PAGE_SIZE = 80
 
         def _get_page(idx):
-            if not page_count:
-                return
             webpage = self._download_webpage(
                 page_url, group_id, query={'page': idx + 1},
                 note='Downloading page %d/%d' % (idx + 1, page_count)

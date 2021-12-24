@@ -1,6 +1,4 @@
-# Unused
-
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import unicode_literals
 
 import itertools
@@ -26,7 +24,7 @@ total_bytes = 0
 
 for page in itertools.count(1):
     releases = json.loads(compat_urllib_request.urlopen(
-        'https://api.github.com/repos/ytdl-org/youtube-dl/releases?page=%s' % page
+        'https://api.github.com/repos/ytdl-org/yt-dlp/releases?page=%s' % page
     ).read().decode('utf-8'))
 
     if not releases:

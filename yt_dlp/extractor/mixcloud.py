@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import itertools
+import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -78,7 +79,7 @@ class MixcloudIE(MixcloudBaseIE):
             for ch, k in compat_zip(ciphertext, itertools.cycle(key))])
 
     def _real_extract(self, url):
-        username, slug = self._match_valid_url(url).groups()
+        username, slug = re.match(self._VALID_URL, url).groups()
         username, slug = compat_urllib_parse_unquote(username), compat_urllib_parse_unquote(slug)
         track_id = '%s_%s' % (username, slug)
 
@@ -156,7 +157,7 @@ class MixcloudIE(MixcloudBaseIE):
                 })
 
         if not formats and cloudcast.get('isExclusive'):
-            self.raise_login_required(metadata_available=True)
+            self.raise_login_required()
 
         self._sort_formats(formats)
 
@@ -213,7 +214,7 @@ class MixcloudPlaylistBaseIE(MixcloudBaseIE):
         return title
 
     def _real_extract(self, url):
-        username, slug = self._match_valid_url(url).groups()
+        username, slug = re.match(self._VALID_URL, url).groups()
         username = compat_urllib_parse_unquote(username)
         if not slug:
             slug = 'uploads'
@@ -250,11 +251,8 @@ class MixcloudPlaylistBaseIE(MixcloudBaseIE):
                 cloudcast_url = cloudcast.get('url')
                 if not cloudcast_url:
                     continue
-                slug = try_get(cloudcast, lambda x: x['slug'], compat_str)
-                owner_username = try_get(cloudcast, lambda x: x['owner']['username'], compat_str)
-                video_id = '%s_%s' % (owner_username, slug) if slug and owner_username else None
                 entries.append(self.url_result(
-                    cloudcast_url, MixcloudIE.ie_key(), video_id))
+                    cloudcast_url, MixcloudIE.ie_key(), cloudcast.get('slug')))
 
             page_info = items['pageInfo']
             has_next_page = page_info['hasNextPage']
@@ -323,8 +321,7 @@ class MixcloudUserIE(MixcloudPlaylistBaseIE):
     _DESCRIPTION_KEY = 'biog'
     _ROOT_TYPE = 'user'
     _NODE_TEMPLATE = '''slug
-          url
-          owner { username }'''
+          url'''
 
     def _get_playlist_title(self, title, slug):
         return '%s (%s)' % (title, slug)
@@ -348,7 +345,6 @@ class MixcloudPlaylistIE(MixcloudPlaylistBaseIE):
     _NODE_TEMPLATE = '''cloudcast {
             slug
             url
-            owner { username }
           }'''
 
     def _get_cloudcast(self, node):

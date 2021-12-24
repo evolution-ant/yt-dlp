@@ -105,7 +105,7 @@ class DouyuTVIE(InfoExtractor):
                 'aid': 'pcclient'
             })['data']['live_url']
 
-        title = unescapeHTML(room['room_name'])
+        title = self._live_title(unescapeHTML(room['room_name']))
         description = room.get('show_details')
         thumbnail = room.get('room_src')
         uploader = room.get('nickname')

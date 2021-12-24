@@ -33,7 +33,7 @@ class MuenchenTVIE(InfoExtractor):
         display_id = 'live'
         webpage = self._download_webpage(url, display_id)
 
-        title = self._og_search_title(webpage)
+        title = self._live_title(self._og_search_title(webpage))
 
         data_js = self._search_regex(
             r'(?s)\nplaylist:\s*(\[.*?}\]),',
@@ -61,7 +61,7 @@ class MuenchenTVIE(InfoExtractor):
                 'tbr': int_or_none(s.get('label')),
                 'ext': 'mp4',
                 'format_id': format_id,
-                'preference': -100 if '.smil' in s['file'] else 0,  # Strictly inferior than all other formats?
+                'preference': -100 if '.smil' in s['file'] else 0,
             })
         self._sort_formats(formats)
 

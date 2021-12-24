@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import unicode_literals
 
 import io
@@ -7,8 +7,6 @@ import re
 
 
 def main():
-    return  # This is unused in yt-dlp
-
     parser = optparse.OptionParser(usage='%prog INFILE OUTFILE')
     options, args = parser.parse_args()
     if len(args) != 2:
@@ -22,7 +20,8 @@ def main():
     bug_text = re.search(
         r'(?s)#\s*BUGS\s*[^\n]*\s*(.*?)#\s*COPYRIGHT', readme).group(1)
     dev_text = re.search(
-        r'(?s)(#\s*DEVELOPER INSTRUCTIONS.*?)#\s*EMBEDDING yt-dlp', readme).group(1)
+        r'(?s)(#\s*DEVELOPER INSTRUCTIONS.*?)#\s*EMBEDDING YT-DLP',
+        readme).group(1)
 
     out = bug_text + dev_text
 

@@ -1,35 +1,11 @@
-all: lazy-extractors yt-dlp doc pypi-files
-clean: clean-test clean-dist clean-cache
-completions: completion-bash completion-fish completion-zsh
-doc: README.md CONTRIBUTING.md issuetemplates supportedsites
-ot: offlinetest
-tar: yt-dlp.tar.gz
+all: yt-dlp README.md CONTRIBUTING.md README.txt yt-dlp.1 yt-dlp.bash-completion yt-dlp.zsh yt-dlp.fish supportedsites
 
-# Keep this list in sync with MANIFEST.in
-# intended use: when building a source distribution,
-# make pypi-files && python setup.py sdist
-pypi-files: AUTHORS Changelog.md LICENSE README.md README.txt supportedsites completions yt-dlp.1 devscripts/* test/*
-
-.PHONY: all clean install test tar pypi-files completions ot offlinetest codetest supportedsites
-
-clean-test:
-	rm -rf test/testdata/player-*.js tmp/ *.annotations.xml *.aria2 *.description *.dump *.frag \
-	*.frag.aria2 *.frag.urls *.info.json *.live_chat.json *.part* *.unknown_video *.ytdl \
-	*.3gp *.ape *.avi *.desktop *.flac *.flv *.jpeg *.jpg *.m4a *.m4v *.mhtml *.mkv *.mov *.mp3 \
-	*.mp4 *.ogg *.opus *.png *.sbv *.srt *.swf *.swp *.ttml *.url *.vtt *.wav *.webloc *.webm *.webp
-clean-dist:
-	rm -rf yt-dlp.1.temp.md yt-dlp.1 README.txt MANIFEST build/ dist/ .coverage cover/ yt-dlp.tar.gz completions/ \
-	yt_dlp/extractor/lazy_extractors.py *.spec CONTRIBUTING.md.tmp yt-dlp yt-dlp.exe yt_dlp.egg-info/ AUTHORS .mailmap
-clean-cache:
-	find . -name "*.pyc" -o -name "*.class" -delete
-
-completion-bash: completions/bash/yt-dlp
-completion-fish: completions/fish/yt-dlp.fish
-completion-zsh: completions/zsh/_yt-dlp
-lazy-extractors: yt_dlp/extractor/lazy_extractors.py
+clean:
+	rm -rf yt-dlp.1.temp.md yt-dlp.1 yt-dlp.bash-completion README.txt MANIFEST build/ dist/ .coverage cover/ yt-dlp.tar.gz yt-dlp.zsh yt-dlp.fish yt_dlp/extractor/lazy_extractors.py *.dump *.part* *.ytdl *.info.json *.mp4 *.m4a *.flv *.mp3 *.avi *.mkv *.webm *.3gp *.wav *.ape *.swf *.jpg *.png CONTRIBUTING.md.tmp yt-dlp yt-dlp.exe
+	find . -name "*.pyc" -delete
+	find . -name "*.class" -delete
 
 PREFIX ?= /usr/local
-DESTDIR ?= .
 BINDIR ?= $(PREFIX)/bin
 MANDIR ?= $(PREFIX)/man
 SHAREDIR ?= $(PREFIX)/share
@@ -41,22 +17,45 @@ SYSCONFDIR = $(shell if [ $(PREFIX) = /usr -o $(PREFIX) = /usr/local ]; then ech
 # set markdown input format to "markdown-smart" for pandoc version 2 and to "markdown" for pandoc prior to version 2
 MARKDOWN = $(shell if [ `pandoc -v | head -n1 | cut -d" " -f2 | head -c1` = "2" ]; then echo markdown-smart; else echo markdown; fi)
 
-install: lazy-extractors yt-dlp yt-dlp.1 completions
-	install -Dm755 yt-dlp $(DESTDIR)$(BINDIR)/yt-dlp
-	install -Dm644 yt-dlp.1 $(DESTDIR)$(MANDIR)/man1/yt-dlp.1
-	install -Dm644 completions/bash/yt-dlp $(DESTDIR)$(SHAREDIR)/bash-completion/completions/yt-dlp
-	install -Dm644 completions/zsh/_yt-dlp $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_yt-dlp
-	install -Dm644 completions/fish/yt-dlp.fish $(DESTDIR)$(SHAREDIR)/fish/vendor_completions.d/yt-dlp.fish
+install: yt-dlp yt-dlp.1 yt-dlp.bash-completion yt-dlp.zsh yt-dlp.fish
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 yt-dlp $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(MANDIR)/man1
+	install -m 644 yt-dlp.1 $(DESTDIR)$(MANDIR)/man1
+	install -d $(DESTDIR)$(SYSCONFDIR)/bash_completion.d
+	install -m 644 yt-dlp.bash-completion $(DESTDIR)$(SYSCONFDIR)/bash_completion.d/yt-dlp
+	install -d $(DESTDIR)$(SHAREDIR)/zsh/site-functions
+	install -m 644 yt-dlp.zsh $(DESTDIR)$(SHAREDIR)/zsh/site-functions/_youtube-dl
+	install -d $(DESTDIR)$(SYSCONFDIR)/fish/completions
+	install -m 644 yt-dlp.fish $(DESTDIR)$(SYSCONFDIR)/fish/completions/yt-dlp.fish
 
 codetest:
 	flake8 .
 
 test:
-	$(PYTHON) -m pytest
+	#nosetests --with-coverage --cover-package=yt_dlp --cover-html --verbose --processes 4 test
+	nosetests --verbose test
 	$(MAKE) codetest
 
+ot: offlinetest
+
+# Keep this list in sync with devscripts/run_tests.sh
 offlinetest: codetest
-	$(PYTHON) -m pytest -k "not download"
+	$(PYTHON) -m nose --verbose test \
+		--exclude test_age_restriction.py \
+		--exclude test_download.py \
+		--exclude test_iqiyi_sdk_interpreter.py \
+		--exclude test_socks.py \
+		--exclude test_subtitles.py \
+		--exclude test_write_annotations.py \
+		--exclude test_youtube_lists.py \
+		--exclude test_youtube_signature.py
+
+tar: yt-dlp.tar.gz
+
+.PHONY: all clean install test tar bash-completion pypi-files zsh-completion fish-completion ot offlinetest codetest supportedsites
+
+pypi-files: yt-dlp.bash-completion README.txt yt-dlp.1 yt-dlp.fish
 
 yt-dlp: yt_dlp/*.py yt_dlp/*/*.py
 	mkdir -p zip
@@ -79,16 +78,15 @@ README.md: yt_dlp/*.py yt_dlp/*/*.py
 CONTRIBUTING.md: README.md
 	$(PYTHON) devscripts/make_contributing.py README.md CONTRIBUTING.md
 
-issuetemplates: devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/1_broken_site.yml .github/ISSUE_TEMPLATE_tmpl/2_site_support_request.yml .github/ISSUE_TEMPLATE_tmpl/3_site_feature_request.yml .github/ISSUE_TEMPLATE_tmpl/4_bug_report.yml .github/ISSUE_TEMPLATE_tmpl/5_feature_request.yml yt_dlp/version.py
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/1_broken_site.yml .github/ISSUE_TEMPLATE/1_broken_site.yml
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/2_site_support_request.yml .github/ISSUE_TEMPLATE/2_site_support_request.yml
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/3_site_feature_request.yml .github/ISSUE_TEMPLATE/3_site_feature_request.yml
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/4_bug_report.yml .github/ISSUE_TEMPLATE/4_bug_report.yml
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/5_feature_request.yml .github/ISSUE_TEMPLATE/5_feature_request.yml
-	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/6_question.yml .github/ISSUE_TEMPLATE/6_question.yml
+issuetemplates: devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/1_broken_site.md .github/ISSUE_TEMPLATE_tmpl/2_site_support_request.md .github/ISSUE_TEMPLATE_tmpl/3_site_feature_request.md .github/ISSUE_TEMPLATE_tmpl/4_bug_report.md .github/ISSUE_TEMPLATE_tmpl/5_feature_request.md yt_dlp/version.py
+	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/1_broken_site.md .github/ISSUE_TEMPLATE/1_broken_site.md
+	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/2_site_support_request.md .github/ISSUE_TEMPLATE/2_site_support_request.md
+	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/3_site_feature_request.md .github/ISSUE_TEMPLATE/3_site_feature_request.md
+	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/4_bug_report.md .github/ISSUE_TEMPLATE/4_bug_report.md
+	$(PYTHON) devscripts/make_issue_template.py .github/ISSUE_TEMPLATE_tmpl/5_feature_request.md .github/ISSUE_TEMPLATE/5_feature_request.md
 
 supportedsites:
-	$(PYTHON) devscripts/make_supportedsites.py supportedsites.md
+	$(PYTHON) devscripts/make_supportedsites.py docs/supportedsites.md
 
 README.txt: README.md
 	pandoc -f $(MARKDOWN) -t plain README.md -o README.txt
@@ -98,24 +96,29 @@ yt-dlp.1: README.md
 	pandoc -s -f $(MARKDOWN) -t man yt-dlp.1.temp.md -o yt-dlp.1
 	rm -f yt-dlp.1.temp.md
 
-completions/bash/yt-dlp: yt_dlp/*.py yt_dlp/*/*.py devscripts/bash-completion.in
-	mkdir -p completions/bash
+yt-dlp.bash-completion: yt_dlp/*.py yt_dlp/*/*.py devscripts/bash-completion.in
 	$(PYTHON) devscripts/bash-completion.py
 
-completions/zsh/_yt-dlp: yt_dlp/*.py yt_dlp/*/*.py devscripts/zsh-completion.in
-	mkdir -p completions/zsh
+bash-completion: yt-dlp.bash-completion
+
+yt-dlp.zsh: yt_dlp/*.py yt_dlp/*/*.py devscripts/zsh-completion.in
 	$(PYTHON) devscripts/zsh-completion.py
 
-completions/fish/yt-dlp.fish: yt_dlp/*.py yt_dlp/*/*.py devscripts/fish-completion.in
-	mkdir -p completions/fish
+zsh-completion: yt-dlp.zsh
+
+yt-dlp.fish: yt_dlp/*.py yt_dlp/*/*.py devscripts/fish-completion.in
 	$(PYTHON) devscripts/fish-completion.py
+
+fish-completion: yt-dlp.fish
+
+lazy-extractors: yt_dlp/extractor/lazy_extractors.py
 
 _EXTRACTOR_FILES = $(shell find yt_dlp/extractor -iname '*.py' -and -not -iname 'lazy_extractors.py')
 yt_dlp/extractor/lazy_extractors.py: devscripts/make_lazy_extractors.py devscripts/lazy_load_template.py $(_EXTRACTOR_FILES)
 	$(PYTHON) devscripts/make_lazy_extractors.py $@
 
-yt-dlp.tar.gz: all
-	@tar -czf $(DESTDIR)/yt-dlp.tar.gz --transform "s|^|yt-dlp/|" --owner 0 --group 0 \
+yt-dlp.tar.gz: yt-dlp README.md README.txt yt-dlp.1 yt-dlp.bash-completion yt-dlp.zsh yt-dlp.fish ChangeLog AUTHORS
+	@tar -czf yt-dlp.tar.gz --transform "s|^|yt-dlp/|" --owner 0 --group 0 \
 		--exclude '*.DS_Store' \
 		--exclude '*.kate-swp' \
 		--exclude '*.pyc' \
@@ -123,15 +126,10 @@ yt-dlp.tar.gz: all
 		--exclude '*~' \
 		--exclude '__pycache__' \
 		--exclude '.git' \
+		--exclude 'docs/_build' \
 		-- \
-		README.md supportedsites.md Changelog.md LICENSE \
-		CONTRIBUTING.md Collaborators.md CONTRIBUTORS AUTHORS \
-		Makefile MANIFEST.in yt-dlp.1 README.txt completions \
-		setup.py setup.cfg yt-dlp yt_dlp requirements.txt \
-		devscripts test tox.ini pytest.ini
-
-AUTHORS: .mailmap
-	git shortlog -s -n | cut -f2 | sort > AUTHORS
-
-.mailmap:
-	git shortlog -s -e -n | awk '!(out[$$NF]++) { $$1="";sub(/^[ \t]+/,""); print}' > .mailmap
+		bin devscripts test yt_dlp docs \
+		ChangeLog AUTHORS LICENSE README.md README.txt \
+		Makefile MANIFEST.in yt-dlp.1 yt-dlp.bash-completion \
+		yt-dlp.zsh yt-dlp.fish setup.py setup.cfg \
+		yt-dlp

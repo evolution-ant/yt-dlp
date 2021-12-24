@@ -15,17 +15,17 @@ class RDSIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?rds\.ca/vid(?:[eé]|%C3%A9)os/(?:[^/]+/)*(?P<id>[^/]+)-\d+\.\d+'
 
     _TESTS = [{
-        # has two 9c9media ContentPackages, the web player selects the first ContentPackage
-        'url': 'https://www.rds.ca/videos/Hockey/NationalHockeyLeague/teams/9/forum-du-5-a-7-jesperi-kotkaniemi-de-retour-de-finlande-3.1377606',
+        'url': 'http://www.rds.ca/videos/football/nfl/fowler-jr-prend-la-direction-de-jacksonville-3.1132799',
         'info_dict': {
-            'id': '2083309',
-            'display_id': 'forum-du-5-a-7-jesperi-kotkaniemi-de-retour-de-finlande',
+            'id': '604333',
+            'display_id': 'fowler-jr-prend-la-direction-de-jacksonville',
             'ext': 'flv',
-            'title': 'Forum du 5 à 7 : Kotkaniemi de retour de Finlande',
-            'description': 'md5:83fa38ecc4a79b19e433433254077f25',
-            'timestamp': 1606129030,
-            'upload_date': '20201123',
-            'duration': 773.039,
+            'title': 'Fowler Jr. prend la direction de Jacksonville',
+            'description': 'Dante Fowler Jr. est le troisième choix du repêchage 2015 de la NFL. ',
+            'timestamp': 1430397346,
+            'upload_date': '20150430',
+            'duration': 154.354,
+            'age_limit': 0,
         }
     }, {
         'url': 'http://www.rds.ca/vid%C3%A9os/un-voyage-positif-3.877934',

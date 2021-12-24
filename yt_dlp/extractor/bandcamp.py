@@ -26,14 +26,14 @@ from ..utils import (
 class BandcampIE(InfoExtractor):
     _VALID_URL = r'https?://[^/]+\.bandcamp\.com/track/(?P<id>[^/?#&]+)'
     _TESTS = [{
-        'url': 'http://youtube-dl.bandcamp.com/track/youtube-dl-test-song',
+        'url': 'http://yt-dlp.bandcamp.com/track/yt-dlp-test-song',
         'md5': 'c557841d5e50261777a6585648adf439',
         'info_dict': {
             'id': '1812978515',
             'ext': 'mp3',
-            'title': "youtube-dl  \"'/\\ä↭ - youtube-dl  \"'/\\ä↭ - youtube-dl test song \"'/\\ä↭",
+            'title': "yt-dlp  \"'/\\ä↭ - yt-dlp  \"'/\\ä↭ - yt-dlp test song \"'/\\ä↭",
             'duration': 9.8485,
-            'uploader': 'youtube-dl  "\'/\\ä↭',
+            'uploader': 'yt-dlp  "\'/\\ä↭',
             'upload_date': '20121129',
             'timestamp': 1354224127,
         },
@@ -49,7 +49,6 @@ class BandcampIE(InfoExtractor):
             'uploader': 'Ben Prunty',
             'timestamp': 1396508491,
             'upload_date': '20140403',
-            'release_timestamp': 1396483200,
             'release_date': '20140403',
             'duration': 260.877,
             'track': 'Lanius (Battle)',
@@ -70,7 +69,6 @@ class BandcampIE(InfoExtractor):
             'uploader': 'Mastodon',
             'timestamp': 1322005399,
             'upload_date': '20111122',
-            'release_timestamp': 1076112000,
             'release_date': '20040207',
             'duration': 120.79,
             'track': 'Hail to Fire',
@@ -199,7 +197,7 @@ class BandcampIE(InfoExtractor):
             'thumbnail': thumbnail,
             'uploader': artist,
             'timestamp': timestamp,
-            'release_timestamp': unified_timestamp(tralbum.get('album_release_date')),
+            'release_date': unified_strdate(tralbum.get('album_release_date')),
             'duration': duration,
             'track': track,
             'track_number': track_number,
@@ -212,7 +210,7 @@ class BandcampIE(InfoExtractor):
 
 class BandcampAlbumIE(BandcampIE):
     IE_NAME = 'Bandcamp:album'
-    _VALID_URL = r'https?://(?:(?P<subdomain>[^.]+)\.)?bandcamp\.com(?!/music)(?:/album/(?P<id>[^/?#&]+))?'
+    _VALID_URL = r'https?://(?:(?P<subdomain>[^.]+)\.)?bandcamp\.com(?:/album/(?P<id>[^/?#&]+))?'
 
     _TESTS = [{
         'url': 'http://blazo.bandcamp.com/album/jazz-format-mixtape-vol-1',
@@ -294,7 +292,7 @@ class BandcampAlbumIE(BandcampIE):
                 else super(BandcampAlbumIE, cls).suitable(url))
 
     def _real_extract(self, url):
-        uploader_id, album_id = self._match_valid_url(url).groups()
+        uploader_id, album_id = re.match(self._VALID_URL, url).groups()
         playlist_id = album_id or uploader_id
         webpage = self._download_webpage(url, playlist_id)
         tralbum = self._extract_data_attr(webpage, playlist_id)
@@ -389,43 +387,3 @@ class BandcampWeeklyIE(BandcampIE):
             'episode_id': show_id,
             'formats': formats
         }
-
-
-class BandcampMusicIE(InfoExtractor):
-    _VALID_URL = r'https?://(?P<id>[^/]+)\.bandcamp\.com/music'
-    _TESTS = [{
-        'url': 'https://steviasphere.bandcamp.com/music',
-        'playlist_mincount': 47,
-        'info_dict': {
-            'id': 'steviasphere',
-        },
-    }, {
-        'url': 'https://coldworldofficial.bandcamp.com/music',
-        'playlist_mincount': 10,
-        'info_dict': {
-            'id': 'coldworldofficial',
-        },
-    }, {
-        'url': 'https://nuclearwarnowproductions.bandcamp.com/music',
-        'playlist_mincount': 399,
-        'info_dict': {
-            'id': 'nuclearwarnowproductions',
-        },
-    }
-    ]
-
-    _TYPE_IE_DICT = {
-        'album': BandcampAlbumIE.ie_key(),
-        'track': BandcampIE.ie_key()
-    }
-
-    def _real_extract(self, url):
-        id = self._match_id(url)
-        webpage = self._download_webpage(url, id)
-        items = re.findall(r'href\=\"\/(?P<path>(?P<type>album|track)+/[^\"]+)', webpage)
-        entries = [
-            self.url_result(
-                f'https://{id}.bandcamp.com/{item[0]}',
-                ie=self._TYPE_IE_DICT[item[1]])
-            for item in items]
-        return self.playlist_result(entries, id)

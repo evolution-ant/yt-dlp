@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -28,7 +29,7 @@ class UstudioIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        video_id, display_id = self._match_valid_url(url).groups()
+        video_id, display_id = re.match(self._VALID_URL, url).groups()
 
         config = self._download_xml(
             'http://v1.ustudio.com/embed/%s/ustudio/config.xml' % video_id,
@@ -82,7 +83,7 @@ class UstudioEmbedIE(InfoExtractor):
     }
 
     def _real_extract(self, url):
-        uploader_id, video_id = self._match_valid_url(url).groups()
+        uploader_id, video_id = re.match(self._VALID_URL, url).groups()
         video_data = self._download_json(
             'http://app.ustudio.com/embed/%s/%s/config.json' % (uploader_id, video_id),
             video_id)['videos'][0]

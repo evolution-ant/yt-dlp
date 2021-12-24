@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -142,7 +143,7 @@ class TumblrIE(InfoExtractor):
         self.report_warning('Login has probably failed')
 
     def _real_extract(self, url):
-        m_url = self._match_valid_url(url)
+        m_url = re.match(self._VALID_URL, url)
         video_id = m_url.group('id')
         blog = m_url.group('blog_name')
 

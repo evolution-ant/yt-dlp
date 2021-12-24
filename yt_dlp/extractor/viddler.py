@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -74,7 +75,7 @@ class ViddlerIE(InfoExtractor):
     }]
 
     def _real_extract(self, url):
-        video_id, secret = self._match_valid_url(url).groups()
+        video_id, secret = re.match(self._VALID_URL, url).groups()
 
         query = {
             'video_id': video_id,

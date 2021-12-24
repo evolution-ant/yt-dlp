@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import json
+import re
 
 from .turner import TurnerBaseIE
 from ..utils import (
@@ -88,7 +89,7 @@ class AdultSwimIE(TurnerBaseIE):
     }]
 
     def _real_extract(self, url):
-        show_path, episode_path = self._match_valid_url(url).groups()
+        show_path, episode_path = re.match(self._VALID_URL, url).groups()
         display_id = episode_path or show_path
         query = '''query {
   getShowBySlug(slug:"%s") {

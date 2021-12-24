@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 
 import json
 import re
+import sys
 
 from .common import InfoExtractor
 from ..utils import (
@@ -93,21 +94,20 @@ class IviIE(InfoExtractor):
             ]
         })
 
+        bundled = hasattr(sys, 'frozen')
+
         for site in (353, 183):
             content_data = (data % site).encode()
             if site == 353:
+                if bundled:
+                    continue
                 try:
                     from Cryptodome.Cipher import Blowfish
                     from Cryptodome.Hash import CMAC
-                    pycryptodome_found = True
+                    pycryptodomex_found = True
                 except ImportError:
-                    try:
-                        from Crypto.Cipher import Blowfish
-                        from Crypto.Hash import CMAC
-                        pycryptodome_found = True
-                    except ImportError:
-                        pycryptodome_found = False
-                        continue
+                    pycryptodomex_found = False
+                    continue
 
                 timestamp = (self._download_json(
                     self._LIGHT_URL, video_id,
@@ -140,8 +140,14 @@ class IviIE(InfoExtractor):
                     extractor_msg = 'Video %s does not exist'
                 elif site == 353:
                     continue
-                elif not pycryptodome_found:
-                    raise ExtractorError('pycryptodomex not found. Please install', expected=True)
+                elif bundled:
+                    raise ExtractorError(
+                        'This feature does not work from bundled exe. Run yt-dlp from sources.',
+                        expected=True)
+                elif not pycryptodomex_found:
+                    raise ExtractorError(
+                        'pycryptodomex not found. Please install it.',
+                        expected=True)
                 elif message:
                     extractor_msg += ': ' + message
                 raise ExtractorError(extractor_msg % video_id, expected=True)
@@ -157,10 +163,7 @@ class IviIE(InfoExtractor):
         for f in result.get('files', []):
             f_url = f.get('url')
             content_format = f.get('content_format')
-            if not f_url:
-                continue
-            if (not self.get_param('allow_unplayable_formats')
-                    and ('-MDRM-' in content_format or '-FPS-' in content_format)):
+            if not f_url or '-MDRM-' in content_format or '-FPS-' in content_format:
                 continue
             formats.append({
                 'url': f_url,
@@ -239,7 +242,7 @@ class IviCompilationIE(InfoExtractor):
                 r'<a\b[^>]+\bhref=["\']/watch/%s/(\d+)["\']' % compilation_id, html)]
 
     def _real_extract(self, url):
-        mobj = self._match_valid_url(url)
+        mobj = re.match(self._VALID_URL, url)
         compilation_id = mobj.group('compilationid')
         season_id = mobj.group('seasonid')
 

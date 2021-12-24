@@ -150,7 +150,7 @@ class PlaytvakIE(InfoExtractor):
                 ext = 'mp4'
                 # Some streams have mp3 audio which does not play
                 # well with ffmpeg filter aac_adtstoasc
-                preference = -10
+                preference = -1
             elif format_ == 'adobe':  # f4m manifest fails with 404 in 80% of requests
                 continue
             else:  # Other formats not supported yet
@@ -167,6 +167,8 @@ class PlaytvakIE(InfoExtractor):
 
         title = item['title']
         is_live = item['type'] == 'stream'
+        if is_live:
+            title = self._live_title(title)
         description = self._og_search_description(webpage, default=None) or self._html_search_meta(
             'description', webpage, 'description', default=None)
         timestamp = None

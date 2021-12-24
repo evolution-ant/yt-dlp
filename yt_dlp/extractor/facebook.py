@@ -1,13 +1,14 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import json
 import re
+import socket
 
 from .common import InfoExtractor
 from ..compat import (
     compat_etree_fromstring,
-    compat_str,
+    compat_http_client,
+    compat_urllib_error,
     compat_urllib_parse_unquote,
     compat_urllib_parse_unquote_plus,
 )
@@ -15,21 +16,14 @@ from ..utils import (
     clean_html,
     error_to_compat_str,
     ExtractorError,
-    float_or_none,
     get_element_by_id,
     int_or_none,
     js_to_json,
     limit_length,
-    merge_dicts,
-    network_exceptions,
     parse_count,
-    parse_qs,
-    qualities,
     sanitized_Request,
     try_get,
-    url_or_none,
     urlencode_postdata,
-    urljoin,
 )
 
 
@@ -37,7 +31,7 @@ class FacebookIE(InfoExtractor):
     _VALID_URL = r'''(?x)
                 (?:
                     https?://
-                        (?:[\w-]+\.)?(?:facebook\.com|facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd\.onion)/
+                        (?:[\w-]+\.)?(?:facebook\.com|facebookcorewwwi\.onion)/
                         (?:[^#]*?\#!/)?
                         (?:
                             (?:
@@ -45,13 +39,12 @@ class FacebookIE(InfoExtractor):
                                 photo\.php|
                                 video\.php|
                                 video/embed|
-                                story\.php|
-                                watch(?:/live)?/?
+                                watch/|
+                                story\.php
                             )\?(?:.*?)(?:v|video_id|story_fbid)=|
                             [^/]+/videos/(?:[^/]+/)?|
                             [^/]+/posts/|
-                            groups/[^/]+/permalink/|
-                            watchparty/
+                            groups/[^/]+/permalink/
                         )|
                     facebook:
                 )
@@ -61,6 +54,8 @@ class FacebookIE(InfoExtractor):
     _CHECKPOINT_URL = 'https://www.facebook.com/checkpoint/?next=http%3A%2F%2Ffacebook.com%2Fhome.php&_fb_noscript=1'
     _NETRC_MACHINE = 'facebook'
     IE_NAME = 'facebook'
+
+    _CHROME_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.97 Safari/537.36'
 
     _VIDEO_PAGE_TEMPLATE = 'https://www.facebook.com/video/video.php?v=%s'
     _VIDEO_PAGE_TAHOE_TEMPLATE = 'https://www.facebook.com/video/tahoe/async/%s/?chain=true&isvideo=true&payloadtype=primary'
@@ -78,13 +73,11 @@ class FacebookIE(InfoExtractor):
         },
         'skip': 'Requires logging in',
     }, {
-        # data.video
         'url': 'https://www.facebook.com/video.php?v=274175099429670',
         'info_dict': {
             'id': '274175099429670',
             'ext': 'mp4',
-            'title': 'Asif Nawab Butt',
-            'description': 'Asif Nawab Butt',
+            'title': 're:^Asif Nawab Butt posted a video',
             'uploader': 'Asif Nawab Butt',
             'upload_date': '20140506',
             'timestamp': 1399398998,
@@ -139,17 +132,14 @@ class FacebookIE(InfoExtractor):
             'upload_date': '20160223',
             'uploader': 'Barack Obama',
         },
-        'skip': 'Gif on giphy.com gone',
     }, {
         # have 1080P, but only up to 720p in swf params
-        # data.video.story.attachments[].media
         'url': 'https://www.facebook.com/cnn/videos/10155529876156509/',
-        'md5': '3f3798adb2b73423263e59376f1f5eb7',
+        'md5': '9571fae53d4165bbbadb17a94651dcdc',
         'info_dict': {
             'id': '10155529876156509',
             'ext': 'mp4',
-            'title': 'Holocaust survivor becomes US citizen',
-            'description': 'She survived the holocaust — and years later, she’s getting her citizenship so she can vote for Hillary Clinton http://cnn.it/2eERh5f',
+            'title': 'She survived the holocaust — and years later, she’s getting her citizenship s...',
             'timestamp': 1477818095,
             'upload_date': '20161030',
             'uploader': 'CNN',
@@ -158,23 +148,19 @@ class FacebookIE(InfoExtractor):
         },
     }, {
         # bigPipe.onPageletArrive ... onPageletArrive pagelet_group_mall
-        # data.node.comet_sections.content.story.attachments[].style_type_renderer.attachment.media
         'url': 'https://www.facebook.com/yaroslav.korpan/videos/1417995061575415/',
         'info_dict': {
             'id': '1417995061575415',
             'ext': 'mp4',
-            'title': 'Yaroslav Korpan - Довгоочікуване відео',
-            'description': 'Довгоочікуване відео',
-            'timestamp': 1486648771,
+            'title': 'md5:1db063d6a8c13faa8da727817339c857',
+            'timestamp': 1486648217,
             'upload_date': '20170209',
             'uploader': 'Yaroslav Korpan',
-            'uploader_id': '100000948048708',
         },
         'params': {
             'skip_download': True,
         },
     }, {
-        # FIXME
         'url': 'https://www.facebook.com/LaGuiaDelVaron/posts/1072691702860471',
         'info_dict': {
             'id': '1072691702860471',
@@ -189,17 +175,14 @@ class FacebookIE(InfoExtractor):
             'skip_download': True,
         },
     }, {
-        # data.node.comet_sections.content.story.attachments[].style_type_renderer.attachment.media
         'url': 'https://www.facebook.com/groups/1024490957622648/permalink/1396382447100162/',
         'info_dict': {
-            'id': '202882990186699',
+            'id': '1396382447100162',
             'ext': 'mp4',
-            'title': 'Elisabeth Ahtn - Hello? Yes your uber ride is here\n* Jukin...',
-            'description': 'Hello? Yes your uber ride is here\n* Jukin Media Verified *\nFind this video and others like it by visiting...',
-            'timestamp': 1486035513,
+            'title': 'md5:19a428bbde91364e3de815383b54a235',
+            'timestamp': 1486035494,
             'upload_date': '20170202',
             'uploader': 'Elisabeth Ahtn',
-            'uploader_id': '100013949973717',
         },
         'params': {
             'skip_download': True,
@@ -211,105 +194,36 @@ class FacebookIE(InfoExtractor):
         'url': 'https://www.facebook.com/amogood/videos/1618742068337349/?fref=nf',
         'only_matching': True,
     }, {
-        # data.mediaset.currMedia.edges
         'url': 'https://www.facebook.com/ChristyClarkForBC/videos/vb.22819070941/10153870694020942/?type=2&theater',
         'only_matching': True,
     }, {
-        # data.video.story.attachments[].media
         'url': 'facebook:544765982287235',
         'only_matching': True,
     }, {
-        # data.node.comet_sections.content.story.attachments[].style_type_renderer.attachment.media
         'url': 'https://www.facebook.com/groups/164828000315060/permalink/764967300301124/',
         'only_matching': True,
     }, {
-        # data.video.creation_story.attachments[].media
         'url': 'https://zh-hk.facebook.com/peoplespower/videos/1135894589806027/',
         'only_matching': True,
     }, {
-        # data.video
-        'url': 'https://www.facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion/video.php?v=274175099429670',
+        'url': 'https://www.facebookcorewwwi.onion/video.php?v=274175099429670',
         'only_matching': True,
     }, {
         # no title
         'url': 'https://www.facebook.com/onlycleverentertainment/videos/1947995502095005/',
         'only_matching': True,
     }, {
-        # data.video
         'url': 'https://www.facebook.com/WatchESLOne/videos/359649331226507/',
         'info_dict': {
             'id': '359649331226507',
             'ext': 'mp4',
-            'title': 'Fnatic vs. EG - Group A - Opening Match - ESL One Birmingham Day 1',
-            'description': '#ESLOne VoD - Birmingham Finals Day#1 Fnatic vs. @Evil Geniuses',
-            'timestamp': 1527084179,
-            'upload_date': '20180523',
+            'title': '#ESLOne VoD - Birmingham Finals Day#1 Fnatic vs. @Evil Geniuses',
             'uploader': 'ESL One Dota 2',
-            'uploader_id': '234218833769558',
         },
         'params': {
             'skip_download': True,
         },
-    }, {
-        # data.node.comet_sections.content.story.attachments[].style_type_renderer.attachment.all_subattachments.nodes[].media
-        'url': 'https://www.facebook.com/100033620354545/videos/106560053808006/',
-        'info_dict': {
-            'id': '106560053808006',
-        },
-        'playlist_count': 2,
-    }, {
-        # data.video.story.attachments[].media
-        'url': 'https://www.facebook.com/watch/?v=647537299265662',
-        'only_matching': True,
-    }, {
-        # FIXME: https://github.com/yt-dlp/yt-dlp/issues/542
-        # data.node.comet_sections.content.story.attachments[].style_type_renderer.attachment.all_subattachments.nodes[].media
-        'url': 'https://www.facebook.com/PankajShahLondon/posts/10157667649866271',
-        'info_dict': {
-            'id': '10157667649866271',
-        },
-        'playlist_count': 3,
-    }, {
-        # data.nodes[].comet_sections.content.story.attachments[].style_type_renderer.attachment.media
-        'url': 'https://m.facebook.com/Alliance.Police.Department/posts/4048563708499330',
-        'info_dict': {
-            'id': '117576630041613',
-            'ext': 'mp4',
-            # TODO: title can be extracted from video page
-            'title': 'Facebook video #117576630041613',
-            'uploader_id': '189393014416438',
-            'upload_date': '20201123',
-            'timestamp': 1606162592,
-        },
-        'skip': 'Requires logging in',
-    }, {
-        # node.comet_sections.content.story.attached_story.attachments.style_type_renderer.attachment.media
-        'url': 'https://www.facebook.com/groups/ateistiskselskab/permalink/10154930137678856/',
-        'info_dict': {
-            'id': '211567722618337',
-            'ext': 'mp4',
-            'title': 'Facebook video #211567722618337',
-            'uploader_id': '127875227654254',
-            'upload_date': '20161122',
-            'timestamp': 1479793574,
-        },
-        'skip': 'No video',
-    }, {
-        # data.video.creation_story.attachments[].media
-        'url': 'https://www.facebook.com/watch/live/?v=1823658634322275',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.facebook.com/watchparty/211641140192478',
-        'info_dict': {
-            'id': '211641140192478',
-        },
-        'playlist_count': 1,
-        'skip': 'Requires logging in',
     }]
-    _SUPPORTED_PAGLETS_REGEX = r'(?:pagelet_group_mall|permalink_video_pagelet|hyperfeed_story_id_[0-9a-f]+)'
-    _api_config = {
-        'graphURI': '/api/graphql/'
-    }
 
     @staticmethod
     def _extract_urls(webpage):
@@ -363,7 +277,7 @@ class FacebookIE(InfoExtractor):
                     login_results, 'login error', default=None, group='error')
                 if error:
                     raise ExtractorError('Unable to login: %s' % error, expected=True)
-                self.report_warning('unable to log in: bad username/password, or exceeded login rate limit (~3/min). Check credentials or wait.')
+                self._downloader.report_warning('unable to log in: bad username/password, or exceeded login rate limit (~3/min). Check credentials or wait.')
                 return
 
             fb_dtsg = self._search_regex(
@@ -384,82 +298,31 @@ class FacebookIE(InfoExtractor):
             check_response = self._download_webpage(check_req, None,
                                                     note='Confirming login')
             if re.search(r'id="checkpointSubmitButton"', check_response) is not None:
-                self.report_warning('Unable to confirm login, you have to login in your browser and authorize the login.')
-        except network_exceptions as err:
-            self.report_warning('unable to log in: %s' % error_to_compat_str(err))
+                self._downloader.report_warning('Unable to confirm login, you have to login in your browser and authorize the login.')
+        except (compat_urllib_error.URLError, compat_http_client.HTTPException, socket.error) as err:
+            self._downloader.report_warning('unable to log in: %s' % error_to_compat_str(err))
             return
 
     def _real_initialize(self):
         self._login()
 
-    def _extract_from_url(self, url, video_id):
-        webpage = self._download_webpage(
-            url.replace('://m.facebook.com/', '://www.facebook.com/'), video_id)
-
-        def extract_metadata(webpage):
-            video_title = self._html_search_regex(
-                r'<h2\s+[^>]*class="uiHeaderTitle"[^>]*>([^<]*)</h2>', webpage,
-                'title', default=None)
-            if not video_title:
-                video_title = self._html_search_regex(
-                    r'(?s)<span class="fbPhotosPhotoCaption".*?id="fbPhotoPageCaption"><span class="hasCaption">(.*?)</span>',
-                    webpage, 'alternative title', default=None)
-            if not video_title:
-                video_title = self._html_search_meta(
-                    ['og:title', 'twitter:title', 'description'],
-                    webpage, 'title', default=None)
-            if video_title:
-                video_title = limit_length(video_title, 80)
-            else:
-                video_title = 'Facebook video #%s' % video_id
-            description = self._html_search_meta(
-                ['description', 'og:description', 'twitter:description'],
-                webpage, 'description', default=None)
-            uploader = clean_html(get_element_by_id(
-                'fbPhotoPageAuthorName', webpage)) or self._search_regex(
-                r'ownerName\s*:\s*"([^"]+)"', webpage, 'uploader',
-                default=None) or self._og_search_title(webpage, fatal=False)
-            timestamp = int_or_none(self._search_regex(
-                r'<abbr[^>]+data-utime=["\'](\d+)', webpage,
-                'timestamp', default=None))
-            thumbnail = self._html_search_meta(
-                ['og:image', 'twitter:image'], webpage, 'thumbnail', default=None)
-            # some webpages contain unretrievable thumbnail urls
-            # like https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id=10155168902769113&get_thumbnail=1
-            # in https://www.facebook.com/yaroslav.korpan/videos/1417995061575415/
-            if thumbnail and not re.search(r'\.(?:jpg|png)', thumbnail):
-                thumbnail = None
-            view_count = parse_count(self._search_regex(
-                r'\bviewCount\s*:\s*["\']([\d,.]+)', webpage, 'view count',
-                default=None))
-            info_dict = {
-                'title': video_title,
-                'description': description,
-                'uploader': uploader,
-                'timestamp': timestamp,
-                'thumbnail': thumbnail,
-                'view_count': view_count,
-            }
-            info_json_ld = self._search_json_ld(webpage, video_id, default={})
-            if info_json_ld.get('title'):
-                info_json_ld['title'] = limit_length(
-                    re.sub(r'\s*\|\s*Facebook$', '', info_json_ld['title']), 80)
-            return merge_dicts(info_json_ld, info_dict)
+    def _extract_from_url(self, url, video_id, fatal_if_no_video=True):
+        req = sanitized_Request(url)
+        req.add_header('User-Agent', self._CHROME_USER_AGENT)
+        webpage = self._download_webpage(req, video_id)
 
         video_data = None
 
         def extract_video_data(instances):
-            video_data = []
             for item in instances:
-                if try_get(item, lambda x: x[1][0]) == 'VideoConfig':
+                if item[1][0] == 'VideoConfig':
                     video_item = item[2][0]
                     if video_item.get('video_id'):
-                        video_data.append(video_item['videoData'])
-            return video_data
+                        return video_item['videoData']
 
         server_js_data = self._parse_json(self._search_regex(
-            [r'handleServerJS\(({.+})(?:\);|,")', r'\bs\.handle\(({.+?})\);'],
-            webpage, 'server js data', default='{}'), video_id, fatal=False)
+            r'handleServerJS\(({.+})(?:\);|,")', webpage,
+            'server js data', default='{}'), video_id, fatal=False)
 
         if server_js_data:
             video_data = extract_video_data(server_js_data.get('instances', []))
@@ -469,174 +332,25 @@ class FacebookIE(InfoExtractor):
                 return extract_video_data(try_get(
                     js_data, lambda x: x['jsmods']['instances'], list) or [])
 
-        def extract_dash_manifest(video, formats):
-            dash_manifest = video.get('dash_manifest')
-            if dash_manifest:
-                formats.extend(self._parse_mpd_formats(
-                    compat_etree_fromstring(compat_urllib_parse_unquote_plus(dash_manifest))))
-
-        def process_formats(formats):
-            # Downloads with browser's User-Agent are rate limited. Working around
-            # with non-browser User-Agent.
-            for f in formats:
-                f.setdefault('http_headers', {})['User-Agent'] = 'facebookexternalhit/1.1'
-
-            self._sort_formats(formats, ('res', 'quality'))
-
-        def extract_relay_data(_filter):
-            return self._parse_json(self._search_regex(
-                r'handleWithCustomApplyEach\([^,]+,\s*({.*?%s.*?})\);' % _filter,
-                webpage, 'replay data', default='{}'), video_id, fatal=False) or {}
-
-        def extract_relay_prefetched_data(_filter):
-            replay_data = extract_relay_data(_filter)
-            for require in (replay_data.get('require') or []):
-                if require[0] == 'RelayPrefetchedStreamCache':
-                    return try_get(require, lambda x: x[3][1]['__bbox']['result']['data'], dict) or {}
-
         if not video_data:
-            server_js_data = self._parse_json(self._search_regex([
-                r'bigPipe\.onPageletArrive\(({.+?})\)\s*;\s*}\s*\)\s*,\s*["\']onPageletArrive\s+' + self._SUPPORTED_PAGLETS_REGEX,
-                r'bigPipe\.onPageletArrive\(({.*?id\s*:\s*"%s".*?})\);' % self._SUPPORTED_PAGLETS_REGEX
-            ], webpage, 'js data', default='{}'), video_id, js_to_json, False)
+            server_js_data = self._parse_json(
+                self._search_regex(
+                    r'bigPipe\.onPageletArrive\(({.+?})\)\s*;\s*}\s*\)\s*,\s*["\']onPageletArrive\s+(?:pagelet_group_mall|permalink_video_pagelet|hyperfeed_story_id_\d+)',
+                    webpage, 'js data', default='{}'),
+                video_id, transform_source=js_to_json, fatal=False)
             video_data = extract_from_jsmods_instances(server_js_data)
 
         if not video_data:
-            data = extract_relay_prefetched_data(
-                r'"(?:dash_manifest|playable_url(?:_quality_hd)?)"\s*:\s*"[^"]+"')
-            if data:
-                entries = []
-
-                def parse_graphql_video(video):
-                    formats = []
-                    q = qualities(['sd', 'hd'])
-                    for (suffix, format_id) in [('', 'sd'), ('_quality_hd', 'hd')]:
-                        playable_url = video.get('playable_url' + suffix)
-                        if not playable_url:
-                            continue
-                        formats.append({
-                            'format_id': format_id,
-                            'quality': q(format_id),
-                            'url': playable_url,
-                        })
-                    extract_dash_manifest(video, formats)
-                    process_formats(formats)
-                    v_id = video.get('videoId') or video.get('id') or video_id
-                    info = {
-                        'id': v_id,
-                        'formats': formats,
-                        'thumbnail': try_get(video, lambda x: x['thumbnailImage']['uri']),
-                        'uploader_id': try_get(video, lambda x: x['owner']['id']),
-                        'timestamp': int_or_none(video.get('publish_time')),
-                        'duration': float_or_none(video.get('playable_duration_in_ms'), 1000),
-                    }
-                    description = try_get(video, lambda x: x['savable_description']['text'])
-                    title = video.get('name')
-                    if title:
-                        info.update({
-                            'title': title,
-                            'description': description,
-                        })
-                    else:
-                        info['title'] = description or 'Facebook video #%s' % v_id
-                    entries.append(info)
-
-                def parse_attachment(attachment, key='media'):
-                    media = attachment.get(key) or {}
-                    if media.get('__typename') == 'Video':
-                        return parse_graphql_video(media)
-
-                nodes = data.get('nodes') or []
-                node = data.get('node') or {}
-                if not nodes and node:
-                    nodes.append(node)
-                for node in nodes:
-                    story = try_get(node, lambda x: x['comet_sections']['content']['story'], dict) or {}
-                    attachments = try_get(story, [
-                        lambda x: x['attached_story']['attachments'],
-                        lambda x: x['attachments']
-                    ], list) or []
-                    for attachment in attachments:
-                        attachment = try_get(attachment, lambda x: x['style_type_renderer']['attachment'], dict)
-                        ns = try_get(attachment, lambda x: x['all_subattachments']['nodes'], list) or []
-                        for n in ns:
-                            parse_attachment(n)
-                        parse_attachment(attachment)
-
-                edges = try_get(data, lambda x: x['mediaset']['currMedia']['edges'], list) or []
-                for edge in edges:
-                    parse_attachment(edge, key='node')
-
-                video = data.get('video') or {}
-                if video:
-                    attachments = try_get(video, [
-                        lambda x: x['story']['attachments'],
-                        lambda x: x['creation_story']['attachments']
-                    ], list) or []
-                    for attachment in attachments:
-                        parse_attachment(attachment)
-                    if not entries:
-                        parse_graphql_video(video)
-
-                if len(entries) > 1:
-                    return self.playlist_result(entries, video_id)
-
-                video_info = entries[0]
-                webpage_info = extract_metadata(webpage)
-                # honor precise duration in video info
-                if video_info.get('duration'):
-                    webpage_info['duration'] = video_info['duration']
-                return merge_dicts(webpage_info, video_info)
-
-        if not video_data:
+            if not fatal_if_no_video:
+                return webpage, False
             m_msg = re.search(r'class="[^"]*uiInterstitialContent[^"]*"><div>(.*?)</div>', webpage)
             if m_msg is not None:
                 raise ExtractorError(
                     'The video is not available, Facebook said: "%s"' % m_msg.group(1),
                     expected=True)
-            elif any(p in webpage for p in (
-                    '>You must log in to continue',
-                    'id="login_form"',
-                    'id="loginbutton"')):
+            elif '>You must log in to continue' in webpage:
                 self.raise_login_required()
 
-        if not video_data and '/watchparty/' in url:
-            post_data = {
-                'doc_id': 3731964053542869,
-                'variables': json.dumps({
-                    'livingRoomID': video_id,
-                }),
-            }
-
-            prefetched_data = extract_relay_prefetched_data(r'"login_data"\s*:\s*{')
-            if prefetched_data:
-                lsd = try_get(prefetched_data, lambda x: x['login_data']['lsd'], dict)
-                if lsd:
-                    post_data[lsd['name']] = lsd['value']
-
-            relay_data = extract_relay_data(r'\[\s*"RelayAPIConfigDefaults"\s*,')
-            for define in (relay_data.get('define') or []):
-                if define[0] == 'RelayAPIConfigDefaults':
-                    self._api_config = define[2]
-
-            living_room = self._download_json(
-                urljoin(url, self._api_config['graphURI']), video_id,
-                data=urlencode_postdata(post_data))['data']['living_room']
-
-            entries = []
-            for edge in (try_get(living_room, lambda x: x['recap']['watched_content']['edges']) or []):
-                video = try_get(edge, lambda x: x['node']['video']) or {}
-                v_id = video.get('id')
-                if not v_id:
-                    continue
-                v_id = compat_str(v_id)
-                entries.append(self.url_result(
-                    self._VIDEO_PAGE_TEMPLATE % v_id,
-                    self.ie_key(), v_id, video.get('name')))
-
-            return self.playlist_result(entries, video_id)
-
-        if not video_data:
             # Video info not in first request, do a secondary request using
             # tahoe player specific URL
             tahoe_data = self._download_webpage(
@@ -666,19 +380,8 @@ class FacebookIE(InfoExtractor):
         if not video_data:
             raise ExtractorError('Cannot parse data')
 
-        if len(video_data) > 1:
-            entries = []
-            for v in video_data:
-                video_url = v[0].get('video_url')
-                if not video_url:
-                    continue
-                entries.append(self.url_result(urljoin(
-                    url, video_url), self.ie_key(), v[0].get('video_id')))
-            return self.playlist_result(entries, video_id)
-        video_data = video_data[0]
-
-        formats = []
         subtitles = {}
+        formats = []
         for f in video_data:
             format_id = f['stream_type']
             if f and isinstance(f, dict):
@@ -689,36 +392,98 @@ class FacebookIE(InfoExtractor):
                 for src_type in ('src', 'src_no_ratelimit'):
                     src = f[0].get('%s_%s' % (quality, src_type))
                     if src:
-                        preference = -10 if format_id == 'progressive' else -1
+                        preference = -10 if format_id == 'progressive' else 0
                         if quality == 'hd':
                             preference += 5
                         formats.append({
                             'format_id': '%s_%s_%s' % (format_id, quality, src_type),
                             'url': src,
-                            'quality': preference,
-                            'height': 720 if quality == 'hd' else None
+                            'preference': preference,
                         })
-            extract_dash_manifest(f[0], formats)
+            dash_manifest = f[0].get('dash_manifest')
+            if dash_manifest:
+                formats.extend(self._parse_mpd_formats(
+                    compat_etree_fromstring(compat_urllib_parse_unquote_plus(dash_manifest))))
             subtitles_src = f[0].get('subtitles_src')
             if subtitles_src:
                 subtitles.setdefault('en', []).append({'url': subtitles_src})
+        if not formats:
+            raise ExtractorError('Cannot find video formats')
 
-        process_formats(formats)
+        # Downloads with browser's User-Agent are rate limited. Working around
+        # with non-browser User-Agent.
+        for f in formats:
+            f.setdefault('http_headers', {})['User-Agent'] = 'facebookexternalhit/1.1'
+
+        self._sort_formats(formats)
+
+        video_title = self._html_search_regex(
+            r'<h2\s+[^>]*class="uiHeaderTitle"[^>]*>([^<]*)</h2>', webpage,
+            'title', default=None)
+        if not video_title:
+            video_title = self._html_search_regex(
+                r'(?s)<span class="fbPhotosPhotoCaption".*?id="fbPhotoPageCaption"><span class="hasCaption">(.*?)</span>',
+                webpage, 'alternative title', default=None)
+        if not video_title:
+            video_title = self._html_search_meta(
+                'description', webpage, 'title', default=None)
+        if video_title:
+            video_title = limit_length(video_title, 80)
+        else:
+            video_title = 'Facebook video #%s' % video_id
+        uploader = clean_html(get_element_by_id(
+            'fbPhotoPageAuthorName', webpage)) or self._search_regex(
+            r'ownerName\s*:\s*"([^"]+)"', webpage, 'uploader',
+            default=None) or self._og_search_title(webpage, fatal=False)
+        timestamp = int_or_none(self._search_regex(
+            r'<abbr[^>]+data-utime=["\'](\d+)', webpage,
+            'timestamp', default=None))
+        thumbnail = self._html_search_meta(['og:image', 'twitter:image'], webpage)
+
+        view_count = parse_count(self._search_regex(
+            r'\bviewCount\s*:\s*["\']([\d,.]+)', webpage, 'view count',
+            default=None))
 
         info_dict = {
             'id': video_id,
+            'title': video_title,
             'formats': formats,
+            'uploader': uploader,
+            'timestamp': timestamp,
+            'thumbnail': thumbnail,
+            'view_count': view_count,
             'subtitles': subtitles,
         }
-        info_dict.update(extract_metadata(webpage))
 
-        return info_dict
+        return webpage, info_dict
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
 
         real_url = self._VIDEO_PAGE_TEMPLATE % video_id if url.startswith('facebook:') else url
-        return self._extract_from_url(real_url, video_id)
+        webpage, info_dict = self._extract_from_url(real_url, video_id, fatal_if_no_video=False)
+
+        if info_dict:
+            return info_dict
+
+        if '/posts/' in url:
+            video_id_json = self._search_regex(
+                r'(["\'])video_ids\1\s*:\s*(?P<ids>\[.+?\])', webpage, 'video ids', group='ids',
+                default='')
+            if video_id_json:
+                entries = [
+                    self.url_result('facebook:%s' % vid, FacebookIE.ie_key())
+                    for vid in self._parse_json(video_id_json, video_id)]
+                return self.playlist_result(entries, video_id)
+
+            # Single Video?
+            video_id = self._search_regex(r'video_id:\s*"([0-9]+)"', webpage, 'single video id')
+            return self.url_result('facebook:%s' % video_id, FacebookIE.ie_key())
+        else:
+            _, info_dict = self._extract_from_url(
+                self._VIDEO_PAGE_TEMPLATE % video_id,
+                video_id, fatal_if_no_video=True)
+            return info_dict
 
 
 class FacebookPluginsVideoIE(InfoExtractor):
@@ -748,42 +513,3 @@ class FacebookPluginsVideoIE(InfoExtractor):
         return self.url_result(
             compat_urllib_parse_unquote(self._match_id(url)),
             FacebookIE.ie_key())
-
-
-class FacebookRedirectURLIE(InfoExtractor):
-    IE_DESC = False  # Do not list
-    _VALID_URL = r'https?://(?:[\w-]+\.)?facebook\.com/flx/warn[/?]'
-    _TESTS = [{
-        'url': 'https://www.facebook.com/flx/warn/?h=TAQHsoToz&u=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DpO8h3EaFRdo&s=1',
-        'info_dict': {
-            'id': 'pO8h3EaFRdo',
-            'ext': 'mp4',
-            'title': 'Tripeo Boiler Room x Dekmantel Festival DJ Set',
-            'description': 'md5:2d713ccbb45b686a1888397b2c77ca6b',
-            'channel_id': 'UCGBpxWJr9FNOcFYA5GkKrMg',
-            'playable_in_embed': True,
-            'categories': ['Music'],
-            'channel': 'Boiler Room',
-            'uploader_id': 'brtvofficial',
-            'uploader': 'Boiler Room',
-            'tags': 'count:11',
-            'duration': 3332,
-            'live_status': 'not_live',
-            'thumbnail': 'https://i.ytimg.com/vi/pO8h3EaFRdo/maxresdefault.jpg',
-            'channel_url': 'https://www.youtube.com/channel/UCGBpxWJr9FNOcFYA5GkKrMg',
-            'availability': 'public',
-            'uploader_url': 'http://www.youtube.com/user/brtvofficial',
-            'upload_date': '20150917',
-            'age_limit': 0,
-            'view_count': int,
-            'like_count': int,
-        },
-        'add_ie': ['Youtube'],
-        'params': {'skip_download': 'Youtube'},
-    }]
-
-    def _real_extract(self, url):
-        redirect_url = url_or_none(parse_qs(url).get('u', [None])[-1])
-        if not redirect_url:
-            raise ExtractorError('Invalid facebook redirect URL', expected=True)
-        return self.url_result(redirect_url)
